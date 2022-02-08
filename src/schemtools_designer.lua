@@ -12,29 +12,58 @@ end
 
 local Port = {}
 function Port:new(p, is_local)
-	local o = {}
+	local o = {
+		p = p,
+		is_local = is_local,
+	}
 	setmetatable(o, self)
 	self.__index = self
-	o.p = p
-	o.is_local = is_local
 	return o
 end
 
 local Schematic = {}
-function Schematic.new()
-	return {
+function Schematic:new()
+	local o = {
 		curs_stack = { Cursor.new() },
+		-- parts[y][x] is a list of particles at (x, y) in stack order
+		-- in schematics, particles can take negative coordinates
 		parts = {},
 		vars = {},
 	}
+	setmetatable(o, self)
+	self.__index = self
+	return o
 end
 
-local Designer = {
-	stack = {},
-}
+function Schematic:place_part(p, part, under)
+	if self.parts[p.y] == nil then
+		self.parts[p.y] = {}
+	end
+	if self.parts[p.y][p.x] == nil then
+		self.parts[p.y][p.x] = {}
+	end
+	if under then
+		table.insert(self.parts[p.y][p.x], 1, part)
+	else
+		table.insert(self.parts[p.y][p.x], part)
+	end
+end
 
+function Schematic:for_each_part(func)
+	for y, row in pairs(self.parts) do
+		for x, stack in pairs(row) do
+			for _, part in ipairs(stack) do
+				func(Point:new(x, y), part)
+			end
+		end
+	end
+end
+
+local Designer = {}
 function Designer:new()
-	local o = {}
+	local o = {
+		stack = {},
+	}
 	setmetatable(o, self)
 	self.__index = self
 	o:begin_scope()
@@ -90,7 +119,7 @@ function Designer:port(name, opts)
 end
 
 function Designer:begin_scope()
-	table.insert(self.stack, Schematic.new())
+	table.insert(self.stack, Schematic:new())
 end
 
 function Designer:end_scope()
@@ -322,61 +351,44 @@ function Designer:part(opts)
 	local part = {}
 	for field_name, _ in pairs(PART_FIELDS) do
 		local val = opts[field_name]
-		if val ~= nil then
+		if val ~= nil and field_name ~= 'x' and field_name ~= 'y' then
 			part[field_name] = val
 		end
 	end
+
 	local schem = self:top()
-	table.insert(schem.parts, part)
+	schem:place_part(opts.p, part)
+
 	if opts.done then
 		self:advance_curs()
 	end
 end
 
-local function translate_part(part, pos)
-	local new_part = {}
-	for field_name, _ in pairs(PART_FIELDS) do
-		local val = part[field_name]
-		if val ~= nil then
-			new_part[field_name] = val
-		end
-	end
-	new_part.x = new_part.x + pos.x
-	new_part.y = new_part.y + pos.y
-	return new_part
-end
-
-function Designer:place(new_schem, opts)
+function Designer:place(child_schem, opts)
 	opts = self:opts_pos(opts)
 	-- "under=1" places particles at the bottom of stacks
 	opts = self:opts_bool(opts, 'under', false)
 	local schem = self:top()
-	local curs = self:get_curs()
-	local schem_pos = curs:add(opts.p)
 	self:push_curs(Point:new(0, 0))
 
-	local old_parts = nil
-	if opts.under then
-		old_parts = schem.parts
-		schem.parts = {}
-	end
+	child_schem:for_each_part(function(p, part)
+		p = p:add(opts.p)
 
-	for _, part in ipairs(new_schem.parts) do
-		self:part(translate_part(part, schem_pos))
-	end
-
-	if opts.under then
-		for _, part in ipairs(old_parts) do
-			table.insert(schem.parts, part)
+		-- clone part to allow schematic to be reused
+		local new_part = {}
+		for k, v in pairs(part) do
+			new_part[k] = v
 		end
-	end
+
+		schem:place_part(p, new_part, opts.under)
+	end)
 
 	self:pop_curs()
 	if opts.name ~= nil then
-		for name, val in pairs(new_schem.vars) do
+		for name, val in pairs(child_schem.vars) do
 			local translated_val = val
 			if getmetatable(val) == Port and not val.is_local then
-				translated_val = Port:new(schem_pos:add(val.p))
+				translated_val = Port:new(opts.p:add(val.p))
 			end
 			schem.vars[opts.name .. '.' .. name] = translated_val
 		end
@@ -395,11 +407,14 @@ end
 
 function Designer:plot(opts)
 	opts = self:opts_pos(opts)
-	local schem = self:top()
 	reload_particle_order()
-	for _, part in ipairs(schem.parts) do
-		part = translate_part(part, opts.p)
-		local t, x, y = part['type'], part.x, part.y
+	local schem = self:top()
+	schem:for_each_part(function(p, part)
+		p = p:add(opts.p)
+		if p.x < 0 or p.y < 0 then
+			return
+		end
+		local t, x, y = part['type'], p.x, p.y
 		if t == elem.DEFAULT_PT_SPRK then
 			sim.partCreate(-3, x, y, part.ctype)
 		end
@@ -411,7 +426,7 @@ function Designer:plot(opts)
 				sim.partProperty(id, field_id, val)
 			end
 		end
-	end
+	end)
 	reload_particle_order()
 end
 
