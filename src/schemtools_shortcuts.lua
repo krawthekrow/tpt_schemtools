@@ -55,11 +55,6 @@ function Shortcuts.init(designer)
 		expose_designer_method(method)
 	end
 
-	local function schem(func)
-		designer:begin_scope()
-		func()
-		return designer:end_scope()
-	end
 	expose_designer_method('dump', 'dump_var')
 	expose_designer_method('schem', 'run_in_scope')
 	expose_designer_method('v', 'get_var')
@@ -71,6 +66,22 @@ function Shortcuts.init(designer)
 	expose_designer_method('pushc', 'push_curs')
 	expose_designer_method('popc', 'pop_curs')
 	expose_designer_method('chain', 'run_with_curs')
+
+	local function array(n, opts, func)
+		designer:run_with_curs(opts, function()
+			for i = 1, n do
+				func(i)
+			end
+		end)
+	end
+	Shortcuts.set_global('array', array)
+
+	local function lport(name, opts)
+		if opts == nil then opts = {} end
+		opts.is_local = true
+		designer:port(name, opts)
+	end
+	Shortcuts.set_global('lport', lport)
 
 	for name, val in pairs(Util.FILT_MODES) do
 		Shortcuts.set_global('f' .. name:lower(), val)
