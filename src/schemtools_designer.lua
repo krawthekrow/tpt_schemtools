@@ -74,6 +74,17 @@ function Designer:top()
 	return self.stack[#self.stack]
 end
 
+function Designer:soft_assert(pred, msg)
+	if not pred then
+		if msg == nil then
+			print('soft assert failed')
+		else
+			print('soft assert failed: ' .. msg)
+		end
+		print(debug.traceback())
+	end
+end
+
 function Designer:set_var(name, val)
 	local schem = self:top()
 	if schem[name] ~= nil then
@@ -277,8 +288,8 @@ function Designer:part(opts)
 	-- custom prop names
 	local function get_orth_dist(from, to)
 		local dp = to:sub(from)
-		assert(not dp:eq(Point:new(0, 0)), 'cannot target self')
-		assert(
+		self:soft_assert(not dp:eq(Point:new(0, 0)), 'cannot target self')
+		self:soft_assert(
 			dp.x == 0 or dp.y == 0 or math.abs(dp.x) == math.abs(dp.y),
 			'target not in one of the ordinal directions'
 		)
@@ -305,16 +316,28 @@ function Designer:part(opts)
 		if type(x) == 'string' then return decode_elem(x) end
 		return x
 	end
-	local function prop_cray_to(to)
+	local function prop_cray_start(s)
 		if opts.from == nil then opts.from = opts.p end
-		local j = get_orth_dist(opts.from, to) - 1
-		assert(j >= 0)
+		local j = get_orth_dist(opts.from, s) - 1
+		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
-	local function prop_dray_to(to)
+	local function prop_dray_start(s)
 		if opts.from == nil then opts.from = opts.p end
-		local j = get_orth_dist(opts.from, to) - opts.tmp - 1
-		assert(j >= 0)
+		local j = get_orth_dist(opts.from, s) - opts.tmp - 1
+		self:soft_assert(j >= 0, 'negative jump requested')
+		return j
+	end
+	local function prop_cray_end(e)
+		if opts.from == nil then opts.from = opts.p end
+		local j = get_orth_dist(opts.from, e) - opts.tmp
+		self:soft_assert(j >= 0, 'negative jump requested')
+		return j
+	end
+	local function prop_dray_end(e)
+		if opts.from == nil then opts.from = opts.p end
+		local j = get_orth_dist(opts.from, e) - opts.tmp - opts.tmp
+		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
 	parse_custom('r', 'pstn', 'temp', prop_pstn_r)
@@ -326,8 +349,10 @@ function Designer:part(opts)
 	parse_custom('ctype', 'any', 'ctype', prop_elem)
 	parse_custom('from', 'conv', 'tmp', prop_elem)
 	parse_custom('to', 'conv', 'ctype', prop_elem)
-	parse_custom('to', 'cray', 'tmp2', prop_cray_to)
-	parse_custom('to', 'dray', 'tmp2', prop_dray_to)
+	parse_custom('s', 'cray', 'tmp2', prop_cray_start)
+	parse_custom('s', 'dray', 'tmp2', prop_dray_start)
+	parse_custom('e', 'cray', 'tmp2', prop_cray_end)
+	parse_custom('e', 'dray', 'tmp2', prop_dray_end)
 
 	-- custom default values
 	local function default_prop(target_type, prop, val)
