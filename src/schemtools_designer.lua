@@ -10,13 +10,22 @@ function Cursor.new()
 	}
 end
 
+local Port = {}
+function Port:new(p, is_local)
+	local o = {}
+	setmetatable(o, self)
+	self.__index = self
+	o.p = p
+	o.is_local = is_local
+	return o
+end
+
 local Schematic = {}
 function Schematic.new()
 	return {
 		curs_stack = { Cursor.new() },
 		parts = {},
 		vars = {},
-		ports = {},
 	}
 end
 
@@ -42,8 +51,11 @@ function Designer:set_var(name, val)
 		schem[name] = val
 		return
 	end
-	if schem.ports[name] ~= nil then
-		schem.ports[name] = val
+	if
+		getmetatable(schem.vars[name]) == Port and
+		getmetatable(val) == Geom.Point
+	then
+		schem.vars[name].p = val
 		return
 	end
 	schem.vars[name] = val
@@ -54,19 +66,27 @@ function Designer:get_var(name)
 	if schem[name] ~= nil then
 		return schem[name]
 	end
-	if schem.ports[name] ~= nil then
-		return schem.ports[name]
-	end
 	assert(
 		schem.vars[name] ~= nil,
 		'variable "' .. name .. '" does not exist'
 	)
+	if getmetatable(schem.vars[name]) == Port then
+		return schem.vars[name].p
+	end
 	return schem.vars[name]
 end
 
 function Designer:port(name, opts)
 	opts = self:opts_pos(opts)
-	self:top().ports[name] = opts.p
+	opts = self:opts_bool(opts, 'is_local', false)
+	local schem = self:top()
+	if schem.vars[name] ~= nil then
+		assert(
+			getmetatable(schem.vars[name]) == Port,
+			'variable "' .. name .. '" already used for non-port'
+		)
+	end
+	schem.vars[name] = Port:new(opts.p, opts.is_local)
 end
 
 function Designer:begin_scope()
@@ -353,11 +373,12 @@ function Designer:place(new_schem, opts)
 
 	self:pop_curs()
 	if opts.name ~= nil then
-		for name, port_pos in pairs(new_schem.ports) do
-			schem.ports[opts.name .. '.' .. name] = schem_pos:add(port_pos)
-		end
 		for name, val in pairs(new_schem.vars) do
-			schem.vars[opts.name .. '.' .. name] = val
+			local translated_val = val
+			if getmetatable(val) == Port and not val.is_local then
+				translated_val = Port:new(schem_pos:add(val.p))
+			end
+			schem.vars[opts.name .. '.' .. name] = translated_val
 		end
 	end
 end
