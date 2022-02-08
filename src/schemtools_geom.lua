@@ -32,4 +32,24 @@ function Point:eq(op)
 	return self.x == op.x and self.y == op.y
 end
 
+function Point:left(n)
+	if n == nil then n = 1 end
+	return self:add(Point:new(-n, 0))
+end
+
+function Point:up(n)
+	if n == nil then n = 1 end
+	return self:add(Point:new(0, -n))
+end
+
+function Point:right(n)
+	if n == nil then n = 1 end
+	return self:add(Point:new(n, 0))
+end
+
+function Point:down(n)
+	if n == nil then n = 1 end
+	return self:add(Point:new(0, n))
+end
+
 return Geom
