@@ -22,7 +22,7 @@ function Util.escape_str(s)
 	return s:gsub('[%c\\]', escape_map)
 end
 
-function Util.dump_var(x)
+function Util.dump_var(x, custom_dump)
 	local tbl_cache = {}
 	local function dump_var_inner(x, indent)
 		if type(x) == 'string' then
@@ -33,6 +33,12 @@ function Util.dump_var(x)
 		end
 		if tbl_cache[tostring(x)] ~= nil then
 			return '*' .. tostring(x)
+		end
+		if custom_dump ~= nil then
+			local custom_res = custom_dump(x)
+			if custom_res ~= nil then
+				return custom_res
+			end
 		end
 		local xstr = tostring(x) .. ' {'
 		for k, v in pairs(x) do

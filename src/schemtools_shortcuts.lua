@@ -60,6 +60,7 @@ function Shortcuts.init(designer)
 		func()
 		return designer:end_scope()
 	end
+	expose_designer_method('dump', 'dump_var')
 	expose_designer_method('schem', 'run_in_scope')
 	expose_designer_method('v', 'get_var')
 	expose_designer_method('setv', 'set_var')
@@ -90,8 +91,6 @@ function Shortcuts.init(designer)
 	Shortcuts.set_global('bxor', bit.bxor)
 	Shortcuts.set_global('bnot', bit.bnot)
 	Shortcuts.set_global('ka', 0x20000000)
-
-	Shortcuts.set_global('dump', Util.dump_var)
 
 	local function make_point(x, y)
 		return Geom.Point:new(x, y)

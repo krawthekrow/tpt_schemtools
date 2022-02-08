@@ -421,4 +421,13 @@ function Designer:clear(opts)
 	end
 end
 
+function Designer:dump_var(x)
+	return Util.dump_var(x, function(x)
+		if getmetatable(x) == Geom.Point then
+			return '(' .. x.x .. ', ' .. x.y .. ')'
+		end
+		return nil
+	end)
+end
+
 return Designer
