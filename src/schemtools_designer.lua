@@ -382,6 +382,8 @@ function Designer:part(opts)
 		end
 	end
 
+	if opts.tag ~= nil then set_var(opts.tag, part) end
+
 	local schem = self:top()
 	schem:place_part(opts.p, part)
 
