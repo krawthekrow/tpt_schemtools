@@ -1,6 +1,7 @@
 local Geom = require('schemtools_geom')
 local Util = require('schemtools_util')
 local Point = Geom.Point
+local Constraints = Geom.Constraints
 
 local Cursor = {}
 function Cursor.new()
@@ -11,10 +12,9 @@ function Cursor.new()
 end
 
 local Port = {}
-function Port:new(p, is_local)
+function Port:new(p)
 	local o = {
 		p = p,
-		is_local = is_local,
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -118,7 +118,6 @@ end
 
 function Designer:port(name, opts)
 	opts = self:opts_pos(opts)
-	opts = self:opts_bool(opts, 'is_local', false)
 	local schem = self:top()
 	if schem.vars[name] ~= nil then
 		assert(
@@ -126,7 +125,7 @@ function Designer:port(name, opts)
 			'variable "' .. name .. '" already used for non-port'
 		)
 	end
-	schem.vars[name] = Port:new(opts.p, opts.is_local)
+	schem.vars[name] = Port:new(opts.p)
 end
 
 function Designer:begin_scope()
@@ -412,12 +411,43 @@ function Designer:place(child_schem, opts)
 	if opts.name ~= nil then
 		for name, val in pairs(child_schem.vars) do
 			local translated_val = val
-			if getmetatable(val) == Port and not val.is_local then
+			if getmetatable(val) == Port then
 				translated_val = Port:new(opts.p:add(val.p))
 			end
 			schem.vars[opts.name .. '.' .. name] = translated_val
 		end
 	end
+end
+
+function Designer:solve_constraints(opts)
+	local RAY_DIRS = {
+		['n'] = Point:new(0, -1),
+		['e'] = Point:new(1, 0),
+		['s'] = Point:new(0, 1),
+		['w'] = Point:new(-1, 0),
+		['ne'] = Point:new(1, 1),
+		['se'] = Point:new(-1, 1),
+		['sw'] = Point:new(-1, -1),
+		['nw'] = Point:new(1, -1),
+	}
+	constraints = {}
+	for k, v in pairs(opts) do
+		local dir = RAY_DIRS[k]
+		if dir ~= nil then
+			table.insert(constraints, Constraints.Ray.new(v, dir))
+		end
+	end
+	assert(#constraints == 2, 'only 2 constraint rays supported')
+	return Constraints.solve_2ray(constraints[1], constraints[2])
+end
+
+function Designer:dump_var(x)
+	return Util.dump_var(x, function(x)
+		if getmetatable(x) == Geom.Point then
+			return '(' .. x.x .. ', ' .. x.y .. ')'
+		end
+		return nil
+	end)
 end
 
 -- Only the methods below interact with the actual simulation.
@@ -480,15 +510,6 @@ function Designer:clear(opts)
 			sim.partKill(i)
 		end
 	end
-end
-
-function Designer:dump_var(x)
-	return Util.dump_var(x, function(x)
-		if getmetatable(x) == Geom.Point then
-			return '(' .. x.x .. ', ' .. x.y .. ')'
-		end
-		return nil
-	end)
 end
 
 return Designer

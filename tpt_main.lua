@@ -50,6 +50,16 @@ local function require_with_path(path, mod_name)
 	return module
 end
 
+local function wrap_with_xpcall(func)
+	local function onerr(err)
+		print(debug.traceback(err, 2))
+	end
+	return function(...)
+		local ok, ret = xpcall(func, onerr, ...)
+		return ret
+	end
+end
+
 function SchemTools:register_trigger(opts)
 	-- default key is Return/Enter
 	if opts.key == nil then opts.key = 13 end
@@ -93,5 +103,5 @@ function SchemTools:register_trigger(opts)
 			schematic_func(self.Main)
 		end
 	end
-	event.register(event.keypress, on_key)
+	event.register(event.keypress, wrap_with_xpcall(on_key))
 end

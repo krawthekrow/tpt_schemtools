@@ -66,6 +66,7 @@ function Shortcuts.init(designer)
 	expose_designer_method('pushc', 'push_curs')
 	expose_designer_method('popc', 'pop_curs')
 	expose_designer_method('chain', 'run_with_curs')
+	expose_designer_method('findpt', 'solve_constraints')
 
 	local function array(n, opts, func)
 		designer:run_with_curs(opts, function()
@@ -77,9 +78,8 @@ function Shortcuts.init(designer)
 	Shortcuts.set_global('array', array)
 
 	local function lport(name, opts)
-		if opts == nil then opts = {} end
-		opts.is_local = true
-		designer:port(name, opts)
+		opts = designer:opts_pos(opts)
+		designer:set_var(name, opts.p)
 	end
 	Shortcuts.set_global('lport', lport)
 
