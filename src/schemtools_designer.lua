@@ -35,7 +35,7 @@ function Schematic:new()
 	return o
 end
 
-function Schematic:place_part(p, part, under)
+function Schematic:place_parts(p, parts, under)
 	if self.parts[p.y] == nil then
 		self.parts[p.y] = {}
 	end
@@ -43,30 +43,44 @@ function Schematic:place_part(p, part, under)
 		self.parts[p.y][p.x] = {}
 	end
 	if under then
-		table.insert(self.parts[p.y][p.x], 1, part)
+		local new_stack = {}
+		for _, part in ipairs(parts) do table.insert(new_stack, part) end
+		for _, part in ipairs(self.parts[p.y][p.x]) do
+			table.insert(new_stack, part)
+		end
+		self.parts[p.y][p.x] = new_stack
 	else
-		table.insert(self.parts[p.y][p.x], part)
+		for _, part in ipairs(parts) do
+			table.insert(self.parts[p.y][p.x], part)
+		end
+	end
+end
+
+function Schematic:for_each_stack(func)
+	for y, row in pairs(self.parts) do
+		for x, stack in pairs(row) do
+			func(Point:new(x, y), stack)
+		end
 	end
 end
 
 function Schematic:for_each_part(func)
-	for y, row in pairs(self.parts) do
-		for x, stack in pairs(row) do
-			for _, part in ipairs(stack) do
-				func(Point:new(x, y), part)
-			end
+	self:for_each_stack(function(p, stack)
+		for _, part in ipairs(stack) do
+			func(p, part)
 		end
-	end
+	end)
 end
 
 local Designer = {}
 function Designer:new()
 	local o = {
 		stack = {},
+		autogen_instance_name_cnt = 0,
 	}
 	setmetatable(o, self)
 	self.__index = self
-	o:begin_scope()
+	o:begin_schem()
 	return o
 end
 
@@ -128,19 +142,19 @@ function Designer:port(name, opts)
 	schem.vars[name] = Port:new(opts.p)
 end
 
-function Designer:begin_scope()
+function Designer:begin_schem()
 	table.insert(self.stack, Schematic:new())
 end
 
-function Designer:end_scope()
-	assert(#self.stack > 1, 'cannot end root scope')
+function Designer:end_schem()
+	assert(#self.stack > 1, 'cannot end root schematic')
 	return table.remove(self.stack)
 end
 
-function Designer:run_in_scope(func)
-	self:begin_scope()
+function Designer:make_schem(func)
+	self:begin_schem()
 	func()
-	return self:end_scope()
+	return self:end_schem()
 end
 
 function Designer:get_curs_info()
@@ -385,25 +399,26 @@ function Designer:part(opts)
 	if opts.tag ~= nil then set_var(opts.tag, part) end
 
 	local schem = self:top()
-	schem:place_part(opts.p, part)
+	schem:place_parts(opts.p, {part})
 
 	if opts.done then
 		self:advance_curs()
 	end
 end
 
-function Designer:place(child_schem, opts)
+function Designer:place_schem(child_schem, opts)
 	opts = self:opts_pos(opts)
+	opts = self:opts_bool(opts, 'done', true)
 	-- "under=1" places particles at the bottom of stacks
 	opts = self:opts_bool(opts, 'under', false)
 	local schem = self:top()
 	self:push_curs(Point:new(0, 0))
 
-	child_schem:for_each_part(function(p, part)
+	child_schem:for_each_stack(function(p, stack)
 		-- Do not clone particles so that var references are
 		-- maintained when a schematic is placed.
 		-- Note that this makes schematics single-use only.
-		schem:place_part(p:add(opts.p), part, opts.under)
+		schem:place_parts(p:add(opts.p), stack, opts.under)
 	end)
 
 	self:pop_curs()
@@ -416,6 +431,22 @@ function Designer:place(child_schem, opts)
 			schem.vars[opts.name .. '.' .. name] = translated_val
 		end
 	end
+
+	if opts.done then
+		self:advance_curs()
+	end
+end
+
+function Designer:instantiate_schem(func, opts)
+	local function call_func_with_args()
+		if opts.args == nil then
+			func(opts)
+		else
+			func(table.unpack(opts.args))
+		end
+	end
+	local schem = self:make_schem(call_func_with_args)
+	self:place_schem(schem, opts)
 end
 
 function Designer:solve_constraints(opts)

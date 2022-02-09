@@ -56,7 +56,6 @@ function Shortcuts.init(designer)
 	end
 
 	expose_designer_method('dump', 'dump_var')
-	expose_designer_method('schem', 'run_in_scope')
 	expose_designer_method('v', 'get_var')
 	expose_designer_method('setv', 'set_var')
 	expose_designer_method('adv', 'advance_curs')
@@ -82,6 +81,11 @@ function Shortcuts.init(designer)
 		designer:set_var(name, opts.p)
 	end
 	Shortcuts.set_global('lport', lport)
+
+	local function schem(opts)
+		designer:instantiate_schem(opts.f, opts)
+	end
+	Shortcuts.set_global('schem', schem)
 
 	for name, val in pairs(Util.FILT_MODES) do
 		Shortcuts.set_global('f' .. name:lower(), val)
