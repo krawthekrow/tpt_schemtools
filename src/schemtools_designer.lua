@@ -398,15 +398,10 @@ function Designer:place(child_schem, opts)
 	self:push_curs(Point:new(0, 0))
 
 	child_schem:for_each_part(function(p, part)
-		p = p:add(opts.p)
-
-		-- clone part to allow schematic to be reused
-		local new_part = {}
-		for k, v in pairs(part) do
-			new_part[k] = v
-		end
-
-		schem:place_part(p, new_part, opts.under)
+		-- Do not clone particles so that var references are
+		-- maintained when a schematic is placed.
+		-- Note that this makes schematics single-use only.
+		schem:place_part(p:add(opts.p), part, opts.under)
 	end)
 
 	self:pop_curs()
