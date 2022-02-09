@@ -426,7 +426,7 @@ local function reload_particle_order()
 	if sim.reloadParticleOrder ~= nil then
 		sim.reloadParticleOrder()
 	else
-		assert(false, 'error: no way to reload particle order; use subframe mod or ask LBPHacker for a script')
+		assert(false, 'no way to reload particle order; use subframe mod or ask LBPHacker for a script')
 	end
 end
 
