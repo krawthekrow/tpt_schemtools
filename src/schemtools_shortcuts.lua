@@ -23,7 +23,7 @@ function Shortcuts.init(designer)
 
 	local function make_part(elem_name)
 		local function part(opts)
-			opts.name = elem_name
+			opts.elem_name = elem_name
 			designer:part(opts)
 		end
 		return part
@@ -75,12 +75,6 @@ function Shortcuts.init(designer)
 		end)
 	end
 	Shortcuts.set_global('array', array)
-
-	local function lport(name, opts)
-		opts = designer:opts_pos(opts)
-		designer:set_var(name, opts.p)
-	end
-	Shortcuts.set_global('lport', lport)
 
 	local function schem(opts)
 		designer:instantiate_schem(opts.f, opts)

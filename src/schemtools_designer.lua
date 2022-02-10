@@ -130,16 +130,16 @@ function Designer:get_var(name)
 	return schem.vars[name]
 end
 
-function Designer:port(name, opts)
+function Designer:port(opts)
 	opts = self:opts_pos(opts)
 	local schem = self:top()
-	if schem.vars[name] ~= nil then
+	if schem.vars[opts.v] ~= nil then
 		assert(
-			getmetatable(schem.vars[name]) == Port,
-			'variable "' .. name .. '" already used for non-port'
+			getmetatable(schem.vars[opts.v]) == Port,
+			'variable "' .. opts.v .. '" already used for non-port'
 		)
 	end
-	schem.vars[name] = Port:new(opts.p)
+	schem.vars[opts.v] = Port:new(opts.p)
 end
 
 function Designer:begin_schem()
@@ -273,8 +273,8 @@ function Designer:part(opts)
 	opts = self:opts_bool(opts, 'done', true)
 	opts = self:opts_bool(opts, 'ss', false)
 
-	if opts.name ~= nil then
-		opts['type'] = decode_elem(opts.name)
+	if opts.elem_name ~= nil then
+		opts['type'] = decode_elem(opts.elem_name)
 	end
 	local t = opts['type']
 
@@ -364,10 +364,12 @@ function Designer:part(opts)
 	parse_custom('ctype', 'any', 'ctype', prop_elem)
 	parse_custom('from', 'conv', 'tmp', prop_elem)
 	parse_custom('to', 'conv', 'ctype', prop_elem)
+	parse_custom('to', 'cray', 'tmp2', prop_cray_start)
 	parse_custom('s', 'cray', 'tmp2', prop_cray_start)
-	parse_custom('s', 'dray', 'tmp2', prop_dray_start)
 	parse_custom('e', 'cray', 'tmp2', prop_cray_end)
-	parse_custom('e', 'dray', 'tmp2', prop_dray_end)
+	parse_custom('to', 'dray', 'tmp2', prop_dray_start)
+	parse_custom('tos', 'dray', 'tmp2', prop_dray_start)
+	parse_custom('toe', 'dray', 'tmp2', prop_dray_end)
 
 	-- custom default values
 	local function default_prop(target_type, prop, val)
@@ -396,7 +398,7 @@ function Designer:part(opts)
 		end
 	end
 
-	if opts.tag ~= nil then set_var(opts.tag, part) end
+	if opts.v ~= nil then set_var(opts.v, part) end
 
 	local schem = self:top()
 	schem:place_parts(opts.p, {part})
@@ -422,13 +424,13 @@ function Designer:place_schem(child_schem, opts)
 	end)
 
 	self:pop_curs()
-	if opts.name ~= nil then
+	if opts.v ~= nil then
 		for name, val in pairs(child_schem.vars) do
 			local translated_val = val
 			if getmetatable(val) == Port then
 				translated_val = Port:new(opts.p:add(val.p))
 			end
-			schem.vars[opts.name .. '.' .. name] = translated_val
+			schem.vars[opts.v .. '.' .. name] = translated_val
 		end
 	end
 
