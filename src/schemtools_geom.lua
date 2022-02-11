@@ -59,14 +59,16 @@ end
 Geom.Constraints = {}
 
 Geom.Constraints.Ray = {}
-function Geom.Constraints.Ray.new(p, d)
+function Geom.Constraints.Ray.new(p, d, is_one_sided)
 	return {
 		p = p,
 		d = d,
+		is_one_sided = is_one_sided,
 	}
 end
 
-function Geom.Constraints.check_ray(r, p)
+local function check_ray_side(r, p)
+	if not r.is_one_sided then return true end
 	local diff = p:sub(r.p)
 	return (
 		(diff.x > 0) == (r.d.x > 0) and
@@ -89,8 +91,8 @@ function Geom.Constraints.solve_2ray(r1, r2)
 
 	local coeff = math.floor(coeff_num / det + 0.5)
 	local sol = r1.d:mult(coeff):add(r1.p)
-	assert(Geom.Constraints.check_ray(r1, sol))
-	assert(Geom.Constraints.check_ray(r2, sol))
+	assert(check_ray_side(r1, sol))
+	assert(check_ray_side(r2, sol))
 	return sol
 end
 

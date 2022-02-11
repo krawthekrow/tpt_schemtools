@@ -531,12 +531,18 @@ function Designer:solve_constraints(opts)
 		['se'] = Point:new(-1, 1),
 		['sw'] = Point:new(-1, -1),
 		['nw'] = Point:new(1, -1),
+		['ns'] = Point:new(0, 1),
+		['ew'] = Point:new(1, 0),
+	}
+	local TWO_SIDED_DIRS = {
+		'ns', 'ew',
 	}
 	constraints = {}
 	for k, v in pairs(opts) do
 		local dir = RAY_DIRS[k]
 		if dir ~= nil then
-			table.insert(constraints, Constraints.Ray.new(v, dir))
+			local is_one_sided = not Util.arr_contains(TWO_SIDED_DIRS, k)
+			table.insert(constraints, Constraints.Ray.new(v, dir, is_one_sided))
 		end
 	end
 	assert(#constraints == 2, 'only 2 constraint rays supported')
