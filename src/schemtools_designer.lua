@@ -12,9 +12,10 @@ function Cursor.new()
 end
 
 local Port = {}
-function Port:new(p)
+function Port:new(p, connect_func)
 	local o = {
 		p = p,
+		connect_func = connect_func,
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -25,6 +26,7 @@ local Schematic = {}
 function Schematic:new()
 	local o = {
 		curs_stack = { Cursor.new() },
+		ctx_stack = { },
 		-- parts[y][x] is a list of particles at (x, y) in stack order
 		-- in schematics, particles can take negative coordinates
 		parts = {},
@@ -99,12 +101,31 @@ function Designer:soft_assert(pred, msg)
 	end
 end
 
+function Designer:top_ctx()
+	local schem = self:top()
+	if #schem.ctx_stack == 0 then return nil end
+	return schem.ctx_stack[#schem.ctx_stack]
+end
+
+function Designer:expand_var_name(name)
+	local ctx = self:top_ctx()
+	if ctx == nil then return name end
+	return ctx .. '.' .. name
+end
+
+local function is_var_name_valid(name)
+	return name:match('^[%a_][%w_]*$') ~= nil
+end
+
 function Designer:set_var(name, val)
+	local is_valid_new_name = is_var_name_valid(name)
+	name = self:expand_var_name(name)
 	local schem = self:top()
 	if schem[name] ~= nil then
 		schem[name] = val
 		return
 	end
+	assert(is_valid_new_name, 'invalid new var name')
 	if
 		getmetatable(schem.vars[name]) == Port and
 		getmetatable(val) == Geom.Point
@@ -117,6 +138,7 @@ end
 
 function Designer:get_var(name)
 	local schem = self:top()
+	name = self:expand_var_name(name)
 	if schem[name] ~= nil then
 		return schem[name]
 	end
@@ -130,6 +152,52 @@ function Designer:get_var(name)
 	return schem.vars[name]
 end
 
+function Designer:push_ctx(ctx)
+	table.insert(self:top().ctx_stack, ctx)
+end
+
+function Designer:pop_ctx()
+	table.remove(self:top().ctx_stack)
+end
+
+function Designer:run_with_ctx(ctx, func)
+	self:push_ctx(ctx)
+	func()
+	self:pop_ctx()
+end
+
+local function parse_full_var_name(full_name)
+	local name = full_name:match('[^.]+$')
+	if name:len() == full_name:len() then
+		return '', name
+	end
+	local ctx = full_name:sub(0, full_name:len() - name:len() - 1)
+	return ctx, name
+end
+
+function Designer:connect(opts)
+	local schem = self:top()
+	local port1 = schem.vars[opts.p1]
+	local port2 = schem.vars[opts.p2]
+	local ctx1, _ = parse_full_var_name(opts.p1)
+	local ctx2, _ = parse_full_var_name(opts.p2)
+	local args1, args2 = opts, opts
+	if opts.args1 ~= nil then args1 = opts.args1 end
+	if opts.args2 ~= nil then args2 = opts.args2 end
+	if port1.connect_func ~= nil then
+		self:run_with_ctx(ctx1, function()
+			args1.p = port2.p
+			port1.connect_func(args1)
+		end)
+	end
+	if port2.connect_func ~= nil then
+		self:run_with_ctx(ctx2, function()
+			args2.p = port1.p
+			port2.connect_func(args2)
+		end)
+	end
+end
+
 function Designer:port(opts)
 	opts = self:opts_pos(opts)
 	local schem = self:top()
@@ -139,7 +207,7 @@ function Designer:port(opts)
 			'variable "' .. opts.v .. '" already used for non-port'
 		)
 	end
-	schem.vars[opts.v] = Port:new(opts.p)
+	self:set_var(opts.v, Port:new(opts.p, opts.f))
 end
 
 function Designer:begin_schem()
@@ -268,6 +336,16 @@ local function decode_elem(name)
 	return elem[Util.ELEM_PREFIX .. name:upper()]
 end
 
+function Designer:get_orth_dist(from, to, soft_assert)
+	local dp = to:sub(from)
+	assert(not from:eq(to), 'source and target are the same location')
+	assert(
+		dp.x == 0 or dp.y == 0 or math.abs(dp.x) == math.abs(dp.y),
+		'target not in one of the ordinal directions'
+	)
+	return math.max(math.abs(dp.x), math.abs(dp.y))
+end
+
 function Designer:part(opts)
 	opts = self:opts_pos(opts)
 	opts = self:opts_bool(opts, 'done', true)
@@ -299,15 +377,6 @@ function Designer:part(opts)
 	}
 
 	-- custom prop names
-	local function get_orth_dist(from, to)
-		local dp = to:sub(from)
-		self:soft_assert(not dp:eq(Point:new(0, 0)), 'cannot target self')
-		self:soft_assert(
-			dp.x == 0 or dp.y == 0 or math.abs(dp.x) == math.abs(dp.y),
-			'target not in one of the ordinal directions'
-		)
-		return math.max(math.abs(dp.x), math.abs(dp.y))
-	end
 	local function custom_elem_match(target_type)
 		if target_type == 'any' then return true end
 		if target_type == 'conduct' then
@@ -331,25 +400,25 @@ function Designer:part(opts)
 	end
 	local function prop_cray_start(s)
 		if opts.from == nil then opts.from = opts.p end
-		local j = get_orth_dist(opts.from, s) - 1
+		local j = self:get_orth_dist(opts.from, s) - 1
 		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
 	local function prop_dray_start(s)
 		if opts.from == nil then opts.from = opts.p end
-		local j = get_orth_dist(opts.from, s) - opts.tmp - 1
+		local j = self:get_orth_dist(opts.from, s) - opts.tmp - 1
 		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
 	local function prop_cray_end(e)
 		if opts.from == nil then opts.from = opts.p end
-		local j = get_orth_dist(opts.from, e) - opts.tmp
+		local j = self:get_orth_dist(opts.from, e) - opts.tmp
 		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
 	local function prop_dray_end(e)
 		if opts.from == nil then opts.from = opts.p end
-		local j = get_orth_dist(opts.from, e) - opts.tmp - opts.tmp
+		local j = self:get_orth_dist(opts.from, e) - opts.tmp - opts.tmp
 		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
@@ -398,7 +467,7 @@ function Designer:part(opts)
 		end
 	end
 
-	if opts.v ~= nil then set_var(opts.v, part) end
+	if opts.v ~= nil then self:set_var(opts.v, part) end
 
 	local schem = self:top()
 	schem:place_parts(opts.p, {part})
@@ -425,13 +494,14 @@ function Designer:place_schem(child_schem, opts)
 
 	self:pop_curs()
 	if opts.v ~= nil then
-		for name, val in pairs(child_schem.vars) do
-			local translated_val = val
-			if getmetatable(val) == Port then
-				translated_val = Port:new(opts.p:add(val.p))
+		self:run_with_ctx(opts.v, function()
+			for name, val in pairs(child_schem.vars) do
+				if getmetatable(val) == Port then
+					val.p = opts.p:add(val.p)
+				end
+				self:set_var(name, val)
 			end
-			schem.vars[opts.v .. '.' .. name] = translated_val
-		end
+		end)
 	end
 
 	if opts.done then

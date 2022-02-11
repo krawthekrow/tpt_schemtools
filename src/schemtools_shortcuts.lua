@@ -46,10 +46,12 @@ function Shortcuts.init(designer)
 		'opts_bool',
 		'opts_pos',
 		'port',
+		'connect',
 		'part',
 		'place',
 		'clear',
 		'plot',
+		'get_orth_dist',
 	}
 	for _, method in ipairs(designer_methods_to_expose) do
 		expose_designer_method(method)
