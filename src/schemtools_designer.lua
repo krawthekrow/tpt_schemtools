@@ -171,7 +171,7 @@ local function parse_full_var_name(full_name)
 	if name:len() == full_name:len() then
 		return '', name
 	end
-	local ctx = full_name:sub(0, full_name:len() - name:len() - 1)
+	local ctx = full_name:sub(1, -name:len() - 2)
 	return ctx, name
 end
 
@@ -522,7 +522,7 @@ function Designer:instantiate_schem(func, opts)
 end
 
 function Designer:solve_constraints(opts)
-	local RAY_DIRS = {
+	local ray_dirs = {
 		['n'] = Point:new(0, -1),
 		['e'] = Point:new(1, 0),
 		['s'] = Point:new(0, 1),
@@ -534,14 +534,18 @@ function Designer:solve_constraints(opts)
 		['ns'] = Point:new(0, 1),
 		['ew'] = Point:new(1, 0),
 	}
-	local TWO_SIDED_DIRS = {
+	local two_sided_dirs = {
 		'ns', 'ew',
 	}
 	constraints = {}
 	for k, v in pairs(opts) do
-		local dir = RAY_DIRS[k]
+		local inclusive_suffix = 'i'
+		local is_inclusive = k:sub(-#inclusive_suffix) == inclusive_suffix
+		if is_inclusive then k = k:sub(1, -#inclusive_suffix - 1) end
+		local dir = ray_dirs[k]
 		if dir ~= nil then
-			local is_one_sided = not Util.arr_contains(TWO_SIDED_DIRS, k)
+			if is_inclusive then v = v:sub(dir) end
+			local is_one_sided = not Util.arr_contains(two_sided_dirs, k)
 			table.insert(constraints, Constraints.Ray.new(v, dir, is_one_sided))
 		end
 	end
