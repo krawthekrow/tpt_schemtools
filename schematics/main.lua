@@ -1,7 +1,8 @@
 require('schematics/stdlib')
+require('schematics/examples_memory')
 require('schematics/testlib')
 
-local function filt_rom_32_demo(SchemTools)
+local function from1d_32_tb(SchemTools)
 	local init_data = {}
 	for i = 1, 32 do
 		table.insert(init_data, bor(ka, i-1))
@@ -32,4 +33,4 @@ local function filt_rom_32_demo(SchemTools)
 	plot{clear={}, run_test=1}
 end
 
-return filt_rom_32_demo
+return from1d_32_tb
