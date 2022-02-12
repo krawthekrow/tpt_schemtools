@@ -12,11 +12,10 @@ local function filt_rom_32_demo(SchemTools)
 		v='rom',
 		init_data=init_data,
 	}
-	port{v='reader_y', p=v('rom.io_min_y')}
-	connect{p1='rom.make_reader', p2='reader_y'}
+	connect{v='rom.make_reader', p=v('rom.io_min_y')}
 	port{v='addr_in', p=v('rom.raddr_in'):left(5)}
 	filt{p=v('addr_in'), ct=ka}
-	connect{p1='addr_in', p2='rom.raddr_in'}
+	connect{v='rom.raddr_in', p=v('addr_in')}
 	port_alias('data_out', 'rom.rdata_out')
 
 	tsetup{

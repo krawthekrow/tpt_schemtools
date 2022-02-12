@@ -168,8 +168,7 @@ local function fram1d_reader(opts)
 	end)
 
 	port{v='make_pscn_placer', f=function(opts)
-		port{v='pscn_placer', p=opts.p}
-		connect{p1='demux.make_pscn_placer', p2='pscn_placer'}
+		connect{v='demux.make_pscn_placer', p=opts.p}
 	end}
 end
 
@@ -199,10 +198,7 @@ function from1d_32(opts)
 			ref='pstn_head',
 		}
 		port{v=opts.name .. '_pscn_placer', p=v('data_e'):right()}
-		connect{
-			p1=opts.name .. '.make_pscn_placer',
-			p2=opts.name .. '_pscn_placer'
-		}
+		connect{v=opts.name .. '.make_pscn_placer', p=v('data_e'):right()}
 		port_alias('raddr_in', opts.name .. '.addr_in')
 		port_alias('rdata_out', opts.name .. '.data_out')
 	end}

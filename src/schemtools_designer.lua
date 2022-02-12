@@ -188,27 +188,33 @@ function Designer:parse_full_var_name(full_name)
 	return ctx, name
 end
 
+function Designer:connect_1way(v_from, p_to, args)
+	local port = self:get_var_raw(v_from)
+	local ctx, _ = self:parse_full_var_name(v_from)
+	if port.connect_func ~= nil then
+		self:run_with_ctx(ctx, function()
+			args.p = p_to
+			port.connect_func(args)
+		end)
+	end
+end
+
 function Designer:connect(opts)
-	local schem = self:top()
-	local port1 = self:get_var_raw(opts.p1)
-	local port2 = self:get_var_raw(opts.p2)
-	local ctx1, _ = self:parse_full_var_name(opts.p1)
-	local ctx2, _ = self:parse_full_var_name(opts.p2)
+	-- 1-way connect
+	if opts.v ~= nil then
+		local args = opts
+		if opts.args ~= nil then args = opts.args end
+		self:connect_1way(opts.v, opts.p, args)
+		return
+	end
+
+	local port1 = self:get_var_raw(opts.v1)
+	local port2 = self:get_var_raw(opts.v2)
 	local args1, args2 = opts, opts
 	if opts.args1 ~= nil then args1 = opts.args1 end
 	if opts.args2 ~= nil then args2 = opts.args2 end
-	if port1.connect_func ~= nil then
-		self:run_with_ctx(ctx1, function()
-			args1.p = port2.p
-			port1.connect_func(args1)
-		end)
-	end
-	if port2.connect_func ~= nil then
-		self:run_with_ctx(ctx2, function()
-			args2.p = port1.p
-			port2.connect_func(args2)
-		end)
-	end
+	self:connect_1way(opts.v1, port2.p, args1)
+	self:connect_1way(opts.v2, port1.p, args2)
 end
 
 function Designer:port(opts)
