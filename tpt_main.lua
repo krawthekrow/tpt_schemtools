@@ -50,9 +50,10 @@ local function require_with_path(path, mod_name)
 	return module
 end
 
-local function wrap_with_xpcall(func)
+local function wrap_with_xpcall(func, after_err)
 	local function onerr(err)
 		print(debug.traceback(err, 2))
+		after_err()
 	end
 	return function(...)
 		local ok, ret = xpcall(func, onerr, ...)
@@ -82,15 +83,15 @@ function SchemTools:register_trigger(opts)
 			require_with_path(self.schemtools_path .. 'src', SCHEMTOOLS_MAIN)
 	end
 
+	local designer = nil
 	local function on_key(key)
 		if key ~= opts.key then return end
 		if opts.reload_tools then
 			reload_tools()
 		end
 		if opts.use_shortcuts then
-			self.Main.Shortcuts.init(
-				self.Main.Designer:new()
-			)
+			designer = self.Main.Designer:new()
+			self.Main.Shortcuts.init(designer)
 		end
 		if opts.reload then
 			if opts.reload_prefix == nil then
@@ -104,4 +105,15 @@ function SchemTools:register_trigger(opts)
 		end
 	end
 	event.register(event.keypress, wrap_with_xpcall(on_key))
+
+	local function on_tick()
+		if designer ~= nil then
+			designer.tester:on_tick()
+		end
+	end
+	event.register(event.tick, wrap_with_xpcall(on_tick, function()
+		if designer ~= nil then
+			designer.tester:stop()
+		end
+	end))
 end

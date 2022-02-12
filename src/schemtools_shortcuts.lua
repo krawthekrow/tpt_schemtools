@@ -46,6 +46,7 @@ function Shortcuts.init(designer)
 		'opts_bool',
 		'opts_pos',
 		'port',
+		'port_alias',
 		'connect',
 		'part',
 		'place',
@@ -68,6 +69,7 @@ function Shortcuts.init(designer)
 	expose_designer_method('popc', 'pop_curs')
 	expose_designer_method('chain', 'run_with_curs')
 	expose_designer_method('findpt', 'solve_constraints')
+	expose_designer_method('tsetup', 'test_setup')
 
 	local function array(n, opts, func)
 		designer:run_with_curs(opts, function()
@@ -83,6 +85,11 @@ function Shortcuts.init(designer)
 	end
 	Shortcuts.set_global('schem', schem)
 
+	local function test_case(opts)
+		designer.tester:test_case(opts)
+	end
+	Shortcuts.set_global('tc', test_case)
+
 	for name, val in pairs(Util.FILT_MODES) do
 		Shortcuts.set_global('f' .. name:lower(), val)
 	end
@@ -94,6 +101,9 @@ function Shortcuts.init(designer)
 			i = i + 1
 		end
 	end
+	local function bsub(x, y)
+		return bit.band(x, bit.bnot(y))
+	end
 	Shortcuts.set_global('ilog2', ilog2)
 	Shortcuts.set_global('shl', bit.lshift)
 	Shortcuts.set_global('shr', bit.rshift)
@@ -101,6 +111,7 @@ function Shortcuts.init(designer)
 	Shortcuts.set_global('bor', bit.bor)
 	Shortcuts.set_global('bxor', bit.bxor)
 	Shortcuts.set_global('bnot', bit.bnot)
+	Shortcuts.set_global('bsub', bsub)
 	Shortcuts.set_global('ka', 0x20000000)
 
 	local function make_point(x, y)

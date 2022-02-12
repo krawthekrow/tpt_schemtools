@@ -4,7 +4,7 @@ function ssconv(opts)
 end
 
 function pstn_demux(opts)
-	opts_bool(opts, 'detach_pscn_placer', false)
+	opts = opts_bool(opts, 'detach_pscn_placer', false)
 	if opts.n == nil then opts.n = 32 end
 	assert(opts.n >= 1)
 	assert(opts.n <= 32)
@@ -27,18 +27,18 @@ function pstn_demux(opts)
 		end)
 	end)
 
+	local cum_piston_r = 0
 	-- piston, binary section
 	chain({dx=-1, p=v('pscnrow_e'):down()}, function()
 		-- each PSTN's pushing power includes all the PSTNs in front of it,
 		-- so subtract the accumulated pushing power from the target
 		-- pushing power
-		local cum_r = 0
 		for i = 1, num_segs do
 			if i == 1 then port{v='pstn_bin_e'} end
 			if i == num_segs then port{v='pstn_bin_w'} end
 			local target_r = shl(1, i - 1)
-			pstn{r=target_r - cum_r, ct='dmnd'}
-			cum_r = target_r
+			pstn{r=target_r - cum_piston_r, ct='dmnd'}
+			cum_piston_r = target_r
 		end
 	end)
 
@@ -105,7 +105,7 @@ function pstn_demux(opts)
 		chain({p=v('apom_pstn_id_holder'), done=0}, function()
 			insl{} -- holds the PSTN's ID
 		end)
-		pstn{r=0}
+		pstn{r=opts.n - cum_piston_r}
 		cray{r=num_segs, from=v('cray_target'), to=v('pscnrow_w')}
 
 		cray{r=1, to=v('apom_pstn_id_holder'), done=0}
@@ -147,4 +147,39 @@ function pstn_demux(opts)
 		nscn{sprk=1}
 		schem{f=ssconv, t='nscn', under=1}
 	end)
+end
+
+function filt_rom_32(opts)
+	if opts.init_data == nil then
+		opts.init_data = {}
+		for i = 1, 32 do
+			table.insert(opts.init_data, ka)
+		end
+	end
+	schem{
+		f=pstn_demux,
+		v='demux',
+		detach_pscn_placer=1,
+	}
+	port_alias('addr_in', 'demux.addr_in')
+	chain({dx=1, p=v('demux.pstn_head')}, function()
+		frme{done=0}
+		frme{oy=1}
+
+		port{v='data_w', oy=-2}
+		port{v='data_out', oy=1}
+		ldtc{r=1, j=1, done=0}
+		filt{oy=1}
+	end)
+	port{v='data', p=v('data_w')}
+
+	chain({dx=1, p=v('data_w')}, function()
+		for i = 1, 32 do
+			if i == 32 then port{v='data_e'} end
+			filt{ct=opts.init_data[i]}
+		end
+	end)
+
+	port{v='demux_pscn_placer_x', p=v('data_e'):right()}
+	connect{p1='demux.pscn_placer', p2='demux_pscn_placer_x'}
 end

@@ -26,7 +26,7 @@ function Util.dump_var(x, custom_dump)
 	local tbl_cache = {}
 	local function dump_var_inner(x, indent)
 		if type(x) == 'string' then
-			return '"' .. escape_str(x) .. '"'
+			return '"' .. Util.escape_str(x) .. '"'
 		end
 		if type(x) ~= 'table' then
 			return tostring(x)

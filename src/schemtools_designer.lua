@@ -1,5 +1,6 @@
 local Geom = require('schemtools_geom')
 local Util = require('schemtools_util')
+local Tester = require('schemtools_tester')
 local Point = Geom.Point
 local Constraints = Geom.Constraints
 
@@ -79,6 +80,7 @@ function Designer:new()
 	local o = {
 		stack = {},
 		autogen_instance_name_cnt = 0,
+		tester = Tester:new(),
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -113,19 +115,19 @@ function Designer:expand_var_name(name)
 	return ctx .. '.' .. name
 end
 
-local function is_var_name_valid(name)
+function Designer:is_var_name_valid(name)
 	return name:match('^[%a_][%w_]*$') ~= nil
 end
 
 function Designer:set_var(name, val)
-	local is_valid_new_name = is_var_name_valid(name)
+	local is_valid_new_name = self:is_var_name_valid(name)
 	name = self:expand_var_name(name)
 	local schem = self:top()
 	if schem[name] ~= nil then
 		schem[name] = val
 		return
 	end
-	assert(is_valid_new_name, 'invalid new var name')
+	assert(is_valid_new_name, 'invalid new var name "' ..  name .. '"')
 	if
 		getmetatable(schem.vars[name]) == Port and
 		getmetatable(val) == Geom.Point
@@ -152,21 +154,26 @@ function Designer:get_var(name)
 	return schem.vars[name]
 end
 
-function Designer:push_ctx(ctx)
+function Designer:begin_ctx(ctx)
+	ctx = self:expand_var_name(ctx)
 	table.insert(self:top().ctx_stack, ctx)
 end
 
-function Designer:pop_ctx()
+function Designer:end_ctx()
 	table.remove(self:top().ctx_stack)
 end
 
 function Designer:run_with_ctx(ctx, func)
-	self:push_ctx(ctx)
+	if ctx == '' then
+		func()
+		return
+	end
+	self:begin_ctx(ctx)
 	func()
-	self:pop_ctx()
+	self:end_ctx()
 end
 
-local function parse_full_var_name(full_name)
+function Designer:parse_full_var_name(full_name)
 	local name = full_name:match('[^.]+$')
 	if name:len() == full_name:len() then
 		return '', name
@@ -179,8 +186,8 @@ function Designer:connect(opts)
 	local schem = self:top()
 	local port1 = schem.vars[opts.p1]
 	local port2 = schem.vars[opts.p2]
-	local ctx1, _ = parse_full_var_name(opts.p1)
-	local ctx2, _ = parse_full_var_name(opts.p2)
+	local ctx1, _ = self:parse_full_var_name(opts.p1)
+	local ctx2, _ = self:parse_full_var_name(opts.p2)
 	local args1, args2 = opts, opts
 	if opts.args1 ~= nil then args1 = opts.args1 end
 	if opts.args2 ~= nil then args2 = opts.args2 end
@@ -208,6 +215,17 @@ function Designer:port(opts)
 		)
 	end
 	self:set_var(opts.v, Port:new(opts.p, opts.f))
+end
+
+function Designer:port_alias(name, orig_name)
+	local schem = self:top()
+	local ctx, _ = self:parse_full_var_name(orig_name)
+	local orig = schem.vars[orig_name]
+	self:port{v=name, p=orig.p, f=function(args)
+		self:run_with_ctx(ctx, function()
+			orig.connect_func(args)
+		end)
+	end}
 end
 
 function Designer:begin_schem()
@@ -313,8 +331,7 @@ function Designer:opts_pt_short(opts, ref, force)
 	end
 	if opts[1] ~= nil then opts.x = opts[1] end
 	if opts[2] ~= nil then opts.y = opts[2] end
-	self:opts_pt(opts, 'p', 'x', 'y', ref, force)
-	return opts
+	return self:opts_pt(opts, 'p', 'x', 'y', ref, force)
 end
 
 function Designer:opts_pos(opts, force)
@@ -499,7 +516,8 @@ function Designer:place_schem(child_schem, opts)
 				if getmetatable(val) == Port then
 					val.p = opts.p:add(val.p)
 				end
-				self:set_var(name, val)
+				name = self:expand_var_name(name)
+				schem.vars[name] = val
 			end
 		end)
 	end
@@ -562,6 +580,34 @@ function Designer:dump_var(x)
 	end)
 end
 
+function Designer:test_setup(opts)
+	if opts.inputs == nil then opts.inputs = {} end
+	if opts.outputs == nil then opts.outputs = {} end
+	if opts.tcs == nil then opts.tcs = {} end
+
+	local function opts_io(opts)
+		if opts.name == nil then
+			assert(opts.v ~= nil)
+			_, opts.name = self:parse_full_var_name(opts.v)
+		end
+		if opts.p == nil then
+			assert(opts.v ~= nil)
+			opts.p = self:get_var(opts.v)
+		end
+		return opts
+	end
+
+	for _, spec in pairs(opts.inputs) do
+		self.tester:add_input(opts_io(spec))
+	end
+	for _, spec in pairs(opts.outputs) do
+		self.tester:add_output(opts_io(spec))
+	end
+	for _, tc in pairs(opts.tcs) do
+		self.tester:test_case(tc)
+	end
+end
+
 -- Only the methods below interact with the actual simulation.
 
 local function reload_particle_order()
@@ -572,7 +618,7 @@ local function reload_particle_order()
 	end
 end
 
-function Designer:plot(opts)
+function Designer:plot_schem(opts)
 	opts = self:opts_pos(opts)
 	reload_particle_order()
 	local schem = self:top()
@@ -621,6 +667,17 @@ function Designer:clear(opts)
 		then
 			sim.partKill(i)
 		end
+	end
+end
+
+function Designer:plot(opts)
+	opts = self:opts_bool(opts, 'run_test', false)
+	if opts.clear ~= nil then
+		self:clear(opts.clear)
+	end
+	self:plot_schem(opts)
+	if opts.run_test then
+		self.tester:start()
 	end
 end
 

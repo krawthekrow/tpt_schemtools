@@ -1,38 +1,32 @@
 require('schematics/stdlib')
+require('schematics/testlib')
 
 return function(SchemTools)
+	local init_data = {}
+	for i = 1, 32 do
+		table.insert(init_data, bor(ka, i-1))
+	end
 	schem{
-		f=pstn_demux,
-		v='demux_1',
+		f=filt_rom_32,
 		x=100, y=100,
-		detach_pscn_placer=1,
+		v='rom',
+		init_data=init_data,
 	}
-	port{v='addr_in', p=v('demux_1.addr_in'):left(5)}
-	filt{p=v('addr_in'), ct=bor(5, ka)}
-	connect{p1='addr_in', p2='demux_1.addr_in'}
-	chain({dx=1, p=v('demux_1.pstn_head')}, function()
-		frme{done=0}
-		frme{oy=1}
+	port{v='addr_in', p=v('rom.addr_in'):left(5)}
+	filt{p=v('addr_in'), ct=ka}
+	connect{p1='addr_in', p2='rom.addr_in'}
+	port_alias('data_out', 'rom.data_out')
 
-		port{v='data_w', oy=-2}
-		ldtc{r=1, j=1, done=0}
-		filt{oy=1}
-	end)
-
-	chain({dx=1, p=v('data_w')}, function()
-		for i = 1, 32 do
-			if i == 32 then port{v='data_e'} end
-			filt{ct=bor(ka, i)}
-		end
-	end)
-
-	port{v='demux_pscn_placer_x', p=v('data_e'):right()}
-	connect{p1='demux_1.pscn_placer', p2='demux_pscn_placer_x'}
-
-	-- connect{p1='demux_1.pscn_placer', p2='demux_1.pstn_head'}
-	-- port{v='demux_head', p=findpt{
-	-- 	e=v('demux_1.pstn_head'), ns=v('demux_1.pscn_placer_e')
-	-- }}
-	clear{w=200, h=200}
-	plot{}
+	tsetup{
+		inputs={
+			{v='addr_in', f=filt_in}
+		},
+		outputs={
+			{v='data_out', f=filt_out}
+		},
+	}
+	for i = 1, 32 do
+		tc{addr_in=i-1, data_out=i-1}
+	end
+	plot{clear={}, run_test=1}
 end
