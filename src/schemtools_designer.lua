@@ -121,12 +121,12 @@ end
 
 function Designer:set_var(name, val)
 	local is_valid_new_name = self:is_var_name_valid(name)
-	name = self:expand_var_name(name)
 	local schem = self:top()
 	if schem[name] ~= nil then
 		schem[name] = val
 		return
 	end
+	name = self:expand_var_name(name)
 	assert(is_valid_new_name, 'invalid new var name "' ..  name .. '"')
 	if
 		getmetatable(schem.vars[name]) == Port and
@@ -138,20 +138,26 @@ function Designer:set_var(name, val)
 	schem.vars[name] = val
 end
 
-function Designer:get_var(name)
+function Designer:get_var_raw(name)
 	local schem = self:top()
 	name = self:expand_var_name(name)
+	return schem.vars[name]
+end
+
+function Designer:get_var(name)
+	local schem = self:top()
 	if schem[name] ~= nil then
 		return schem[name]
 	end
+	local val = self:get_var_raw(name)
 	assert(
-		schem.vars[name] ~= nil,
+		val ~= nil,
 		'variable "' .. name .. '" does not exist'
 	)
-	if getmetatable(schem.vars[name]) == Port then
-		return schem.vars[name].p
+	if getmetatable(val) == Port then
+		return val.p
 	end
-	return schem.vars[name]
+	return val
 end
 
 function Designer:begin_ctx(ctx)
@@ -184,8 +190,8 @@ end
 
 function Designer:connect(opts)
 	local schem = self:top()
-	local port1 = schem.vars[opts.p1]
-	local port2 = schem.vars[opts.p2]
+	local port1 = self:get_var_raw(opts.p1)
+	local port2 = self:get_var_raw(opts.p2)
 	local ctx1, _ = self:parse_full_var_name(opts.p1)
 	local ctx2, _ = self:parse_full_var_name(opts.p2)
 	local args1, args2 = opts, opts
@@ -208,9 +214,10 @@ end
 function Designer:port(opts)
 	opts = self:opts_pos(opts)
 	local schem = self:top()
-	if schem.vars[opts.v] ~= nil then
+	local existing_val = self:get_var_raw(opts.v)
+	if existing_val ~= nil then
 		assert(
-			getmetatable(schem.vars[opts.v]) == Port,
+			getmetatable(existing_val) == Port,
 			'variable "' .. opts.v .. '" already used for non-port'
 		)
 	end
@@ -220,7 +227,7 @@ end
 function Designer:port_alias(name, orig_name)
 	local schem = self:top()
 	local ctx, _ = self:parse_full_var_name(orig_name)
-	local orig = schem.vars[orig_name]
+	local orig = self:get_var_raw(orig_name)
 	self:port{v=name, p=orig.p, f=function(args)
 		self:run_with_ctx(ctx, function()
 			orig.connect_func(args)
@@ -501,6 +508,10 @@ function Designer:place_schem(child_schem, opts)
 	opts = self:opts_bool(opts, 'under', false)
 	local schem = self:top()
 	self:push_curs(Point:new(0, 0))
+
+	if opts.ref ~= nil then
+		opts.p = opts.p:sub(child_schem.vars[opts.ref].p)
+	end
 
 	child_schem:for_each_stack(function(p, stack)
 		-- Do not clone particles so that var references are

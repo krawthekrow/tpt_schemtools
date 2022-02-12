@@ -78,7 +78,7 @@ function pstn_demux(opts)
 
 	port{v='pscn_placer_wbnd', p=v('pscnrow_e'):right(2)}
 	if opts.detach_pscn_placer then
-		port{v='pscn_placer', f=function(opts)
+		port{v='make_pscn_placer', f=function(opts)
 			make_pscn_placer(findpt{ns=opts.p, ei=v('pscn_placer_wbnd')}, true)
 		end}
 	else
@@ -149,13 +149,7 @@ function pstn_demux(opts)
 	end)
 end
 
-function filt_rom_32(opts)
-	if opts.init_data == nil then
-		opts.init_data = {}
-		for i = 1, 32 do
-			table.insert(opts.init_data, ka)
-		end
-	end
+local function fram1d_reader(opts)
 	schem{
 		f=pstn_demux,
 		v='demux',
@@ -166,20 +160,50 @@ function filt_rom_32(opts)
 		frme{done=0}
 		frme{oy=1}
 
-		port{v='data_w', oy=-2}
+		-- we're adding a frame, so the actual piston head is one further
+		port{v='pstn_head'}
 		port{v='data_out', oy=1}
 		ldtc{r=1, j=1, done=0}
 		filt{oy=1}
 	end)
-	port{v='data', p=v('data_w')}
 
-	chain({dx=1, p=v('data_w')}, function()
+	port{v='make_pscn_placer', f=function(opts)
+		port{v='pscn_placer', p=opts.p}
+		connect{p1='demux.make_pscn_placer', p2='pscn_placer'}
+	end}
+end
+
+function from1d_32(opts)
+	if opts.init_data == nil then
+		opts.init_data = {}
+		for i = 1, 32 do
+			table.insert(opts.init_data, ka)
+		end
+	end
+
+	port{v='data_w'}
+	chain({dx=1}, function()
 		for i = 1, 32 do
 			if i == 32 then port{v='data_e'} end
 			filt{ct=opts.init_data[i]}
 		end
 	end)
 
-	port{v='demux_pscn_placer_x', p=v('data_e'):right()}
-	connect{p1='demux.pscn_placer', p2='demux_pscn_placer_x'}
+	port{v='io_min_y', p=v('data_w'):down(2)}
+	port{v='make_reader', f=function(opts)
+		if opts.name == nil then opts.name = 'reader' end
+		schem{
+			f=fram1d_reader,
+			v=opts.name,
+			p=findpt{s=v('data_w'):down(), ew=opts.p},
+			ref='pstn_head',
+		}
+		port{v=opts.name .. '_pscn_placer', p=v('data_e'):right()}
+		connect{
+			p1=opts.name .. '.make_pscn_placer',
+			p2=opts.name .. '_pscn_placer'
+		}
+		port_alias('raddr_in', opts.name .. '.addr_in')
+		port_alias('rdata_out', opts.name .. '.data_out')
+	end}
 end
