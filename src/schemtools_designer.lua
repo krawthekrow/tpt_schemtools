@@ -380,6 +380,7 @@ function Designer:part(opts)
 	opts = self:opts_pos(opts)
 	opts = self:opts_bool(opts, 'done', true)
 	opts = self:opts_bool(opts, 'ss', false)
+	opts = self:opts_bool(opts, 'under', false)
 
 	if opts.elem_name ~= nil then
 		opts['type'] = decode_elem(opts.elem_name)
@@ -500,7 +501,7 @@ function Designer:part(opts)
 	if opts.v ~= nil then self:set_var(opts.v, part) end
 
 	local schem = self:top()
-	schem:place_parts(opts.p, {part})
+	schem:place_parts(opts.p, {part}, opts.under)
 
 	if opts.done then
 		self:advance_curs()
