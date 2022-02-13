@@ -53,6 +53,7 @@ function Shortcuts.init(designer)
 		'clear',
 		'plot',
 		'get_orth_dist',
+		'get_dtec_dist',
 	}
 	for _, method in ipairs(designer_methods_to_expose) do
 		expose_designer_method(method)

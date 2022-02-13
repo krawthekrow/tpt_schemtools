@@ -376,6 +376,11 @@ function Designer:get_orth_dist(from, to, soft_assert)
 	return math.max(math.abs(dp.x), math.abs(dp.y))
 end
 
+function Designer:get_dtec_dist(from, to)
+	local dp = to:sub(from)
+	return math.max(math.abs(dp.x), math.abs(dp.y))
+end
+
 function Designer:part(opts)
 	opts = self:opts_pos(opts)
 	opts = self:opts_bool(opts, 'done', true)
@@ -453,10 +458,32 @@ function Designer:part(opts)
 		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
+	local function prop_dtec_to(to)
+		if opts.from == nil then opts.from = opts.p end
+		local r = self:get_dtec_dist(opts.from, to)
+		return r
+	end
+	local function prop_filt_mode(s)
+		local filt_mode_names = {
+			'set', 'and', 'or', 'sub',
+			'<<', '>>', 'noeff', 'xor',
+			'not', 'scat', '<<<', '>>>',
+		}
+		for i, v in ipairs(filt_mode_names) do
+			if s == v then
+				return i - 1
+			end
+		end
+		self:soft_assert(false, 'filt mode "' .. s .. '" not recognized')
+		print('available filt modes:')
+		self:dump_var(filt_mode_names)
+		return 0
+	end
 	parse_custom('r', 'pstn', 'temp', prop_pstn_r)
 	parse_custom('r', 'cray', 'tmp', prop_id)
 	parse_custom('r', 'dray', 'tmp', prop_id)
 	parse_custom('r', 'ldtc', 'tmp', prop_id)
+	parse_custom('r', 'dtec', 'tmp2', prop_id)
 	parse_custom('j', 'cray', 'tmp2', prop_id)
 	parse_custom('j', 'dray', 'tmp2', prop_id)
 	parse_custom('j', 'ldtc', 'life', prop_id)
@@ -470,6 +497,11 @@ function Designer:part(opts)
 	parse_custom('to', 'dray', 'tmp2', prop_dray_start)
 	parse_custom('tos', 'dray', 'tmp2', prop_dray_start)
 	parse_custom('toe', 'dray', 'tmp2', prop_dray_end)
+	parse_custom('to', 'ldtc', 'life', prop_cray_start)
+	parse_custom('s', 'ldtc', 'life', prop_cray_start)
+	parse_custom('e', 'ldtc', 'life', prop_cray_end)
+	parse_custom('to', 'dtec', 'tmp2', prop_dtec_to)
+	parse_custom('mode', 'filt', 'tmp', prop_filt_mode)
 
 	-- custom default values
 	local function default_prop(target_type, prop, val)
