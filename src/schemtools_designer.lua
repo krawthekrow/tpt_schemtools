@@ -550,6 +550,8 @@ function Designer:part(opts)
 	if opts.done then
 		self:advance_curs()
 	end
+
+	return part
 end
 
 function Designer:place_schem(child_schem, opts)

@@ -24,7 +24,7 @@ function Shortcuts.init(designer)
 	local function make_part(elem_name)
 		local function part(opts)
 			opts.elem_name = elem_name
-			designer:part(opts)
+			return designer:part(opts)
 		end
 		return part
 	end
