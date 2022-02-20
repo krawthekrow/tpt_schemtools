@@ -91,10 +91,6 @@ function Shortcuts.init(designer)
 	end
 	Shortcuts.set_global('tc', test_case)
 
-	for name, val in pairs(Util.FILT_MODES) do
-		Shortcuts.set_global('f' .. name:lower(), val)
-	end
-
 	local function ilog2(x)
 		local i = 0
 		while true do
