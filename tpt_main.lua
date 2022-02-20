@@ -117,3 +117,12 @@ function SchemTools:register_trigger(opts)
 		end
 	end))
 end
+
+function SchemTools:register_default_trigger()
+	self:register_trigger{
+		reload_tools = true,
+		reload_path = 'schemtools',
+		reload_prefix = 'schem/',
+		reload_entry = 'schem/main',
+	}
+end
