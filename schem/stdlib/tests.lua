@@ -1,7 +1,10 @@
-require('schematics/stdlib')
-require('schematics/testlib')
-require('schematics/examples_memory')
-require('schematics/examples_procedural')
+require('schem/stdlib/core')
+require('schem/stdlib/testlib')
+
+require('schem/stdlib/fram1d')
+require('schem/stdlib/procedural')
+require('schem/stdlib/vram56')
+require('schem/stdlib/spu56')
 
 function shr_1_tb()
 	schem{
@@ -48,7 +51,7 @@ function from1d_32_tb()
 	port{v='addr_in', p=v('rom.raddr_in'):left(5)}
 	filt{p=v('addr_in'), ct=ka}
 	connect{v='rom.raddr_in', p=v('addr_in')}
-	port_alias('data_out', 'rom.rdata_out')
+	port_alias{from='rom.rdata_out', to='data_out'}
 
 	tsetup{
 		inputs={
@@ -62,4 +65,31 @@ function from1d_32_tb()
 		tc{addr_in=i-1, data_out=i-1}
 	end
 	plot{clear={}, run_test=1}
+end
+
+function spu56_tb()
+	schem{
+		f=spu56,
+		x=100, y=100,
+	}
+	plot{clear={}, run_test=0}
+end
+
+function vram56_tb()
+	local init_data = {}
+	for i = 1, 64 do
+		local row = {}
+		for j = 1, 56 * 2 do
+			table.insert(row, bor(ka, i * 128 + j))
+		end
+		table.insert(init_data, row)
+	end
+	schem{
+		f=vram56,
+		v='vram',
+		x=100, y=100,
+		init_data=init_data,
+	}
+	connect{v='vram.make_writer', p=v('vram.data_sw'):down(10)}
+	plot{clear={}, run_test=0}
 end
