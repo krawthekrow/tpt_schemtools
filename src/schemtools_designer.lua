@@ -479,6 +479,13 @@ function Designer:part(opts)
 		self:dump_var(filt_mode_names)
 		return 0
 	end
+	local function prop_frme_sticky(x)
+		if type(x) == 'number' then
+			if x == 0 then x = false else x = true end
+		end
+		-- tmp = 0 makes FRME sticky, so invert
+		if x then return 0 else return 1 end
+	end
 	parse_custom('r', 'pstn', 'temp', prop_pstn_r)
 	parse_custom('r', 'cray', 'tmp', prop_id)
 	parse_custom('r', 'dray', 'tmp', prop_id)
@@ -502,6 +509,7 @@ function Designer:part(opts)
 	parse_custom('e', 'ldtc', 'life', prop_cray_end)
 	parse_custom('to', 'dtec', 'tmp2', prop_dtec_to)
 	parse_custom('mode', 'filt', 'tmp', prop_filt_mode)
+	parse_custom('sticky', 'frme', 'tmp', prop_frme_sticky)
 
 	-- custom default values
 	local function default_prop(target_type, prop, val)
