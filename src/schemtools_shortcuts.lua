@@ -73,6 +73,11 @@ function Shortcuts.init(designer)
 	expose_designer_method('tsetup', 'test_setup')
 
 	local function array(opts)
+		if opts.from ~= nil then opts.p = opts.from end
+		if opts.to ~= nil then
+			opts.n = designer:get_orth_dist(opts.p, opts.to) + 1
+			opts.dp = designer:get_orth_dir(opts.p, opts.to)
+		end
 		local func = opts.f
 		opts.f = function()
 			for i = 1, opts.n do

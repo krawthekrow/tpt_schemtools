@@ -366,14 +366,28 @@ local function decode_elem(name)
 	return elem[Util.ELEM_PREFIX .. name:upper()]
 end
 
-function Designer:get_orth_dist(from, to, soft_assert)
+local function check_orth(from, to)
 	local dp = to:sub(from)
-	assert(not from:eq(to), 'source and target are the same location')
 	assert(
 		dp.x == 0 or dp.y == 0 or math.abs(dp.x) == math.abs(dp.y),
 		'target not in one of the ordinal directions'
 	)
+end
+
+function Designer:get_orth_dist(from, to)
+	check_orth(from, to)
+	local dp = to:sub(from)
 	return math.max(math.abs(dp.x), math.abs(dp.y))
+end
+
+function Designer:get_orth_dir(from, to)
+	check_orth(from, to)
+	local dp = to:sub(from)
+	if dp.x > 0 then dp.x = 1 end
+	if dp.x < 0 then dp.x = -1 end
+	if dp.y > 0 then dp.y = 1 end
+	if dp.y < 0 then dp.y = -1 end
+	return dp
 end
 
 function Designer:get_dtec_dist(from, to)
