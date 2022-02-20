@@ -78,6 +78,14 @@ function Util.arr_contains(arr, x)
 	return false
 end
 
+function Util.tbl_keys(tbl)
+	local keys = {}
+	for k, _ in pairs(tbl) do
+		table.insert(keys, k)
+	end
+	return keys
+end
+
 -- tpt specific
 
 Util.ELEM_PREFIX = 'DEFAULT_PT_'

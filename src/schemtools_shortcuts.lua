@@ -115,6 +115,8 @@ function Shortcuts.init(designer)
 		return Geom.Point:new(x, y)
 	end
 	Shortcuts.set_global('p', make_point)
+
+	Shortcuts.set_global('Util', Util)
 end
 
 function Shortcuts.teardown_globals()
