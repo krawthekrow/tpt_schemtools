@@ -631,7 +631,11 @@ function Designer:solve_constraints(opts)
 			table.insert(constraints, Constraints.Ray.new(v, dir, is_one_sided))
 		end
 	end
-	assert(#constraints == 2, 'only 2 constraint rays supported')
+	assert(
+		#constraints == 2,
+		'constraint satisfaction only supported for exactly two rays, ' ..
+		'but ' .. #constraints .. ' ray(s) provided'
+	)
 	return Constraints.solve_2ray(constraints[1], constraints[2])
 end
 
