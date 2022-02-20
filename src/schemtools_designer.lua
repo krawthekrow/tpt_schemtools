@@ -529,6 +529,10 @@ function Designer:part(opts)
 		if opts.life == nil then opts.life = 4 end
 	end
 
+	if opts.temp ~= nil then
+		assert(opts.temp >= 0, 'temp must be at least 0K')
+	end
+
 	lazy_init_part_fields()
 	local part = {}
 	for field_name, _ in pairs(PART_FIELDS) do
