@@ -230,11 +230,11 @@ function Designer:port(opts)
 	self:set_var(opts.v, Port:new(opts.p, opts.f))
 end
 
-function Designer:port_alias(name, orig_name)
+function Designer:port_alias(opts)
 	local schem = self:top()
-	local ctx, _ = self:parse_full_var_name(orig_name)
-	local orig = self:get_var_raw(orig_name)
-	self:port{v=name, p=orig.p, f=function(args)
+	local ctx, _ = self:parse_full_var_name(opts.from)
+	local orig = self:get_var_raw(opts.from)
+	self:port{v=opts.to, p=orig.p, f=function(args)
 		self:run_with_ctx(ctx, function()
 			orig.connect_func(args)
 		end)
@@ -292,13 +292,13 @@ function Designer:pop_curs()
 	table.remove(self:top().curs_stack)
 end
 
-function Designer:run_with_curs(opts, func)
+function Designer:run_with_curs(opts)
 	opts = self:opts_bool(opts, 'done', true)
 	opts = self:opts_pos(opts, curs, false)
 	opts = self:opts_pt(opts, 'dp', 'dx', 'dy')
 	self:push_curs({ p = opts.dp })
 	if opts.p ~= nil then self:set_curs(opts.p) end
-	func()
+	opts.f()
 	self:pop_curs()
 	if opts.done then
 		self:advance_curs()

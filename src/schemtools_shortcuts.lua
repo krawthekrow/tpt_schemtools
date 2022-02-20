@@ -72,12 +72,14 @@ function Shortcuts.init(designer)
 	expose_designer_method('findpt', 'solve_constraints')
 	expose_designer_method('tsetup', 'test_setup')
 
-	local function array(n, opts, func)
-		designer:run_with_curs(opts, function()
-			for i = 1, n do
+	local function array(opts)
+		local func = opts.f
+		opts.f = function()
+			for i = 1, opts.n do
 				func(i)
 			end
-		end)
+		end
+		designer:run_with_curs(opts)
 	end
 	Shortcuts.set_global('array', array)
 
