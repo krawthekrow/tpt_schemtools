@@ -91,8 +91,8 @@ function Geom.Constraints.solve_2ray(r1, r2)
 
 	local coeff = math.floor(coeff_num / det + 0.5)
 	local sol = r1.d:mult(coeff):add(r1.p)
-	assert(check_ray_side(r1, sol))
-	assert(check_ray_side(r2, sol))
+	assert(check_ray_side(r1, sol), 'solution does not satisfy constraint')
+	assert(check_ray_side(r2, sol), 'solution does not satisfy constraint')
 	return sol
 end
 
