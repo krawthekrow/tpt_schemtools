@@ -84,7 +84,8 @@ function SchemTools:register_trigger(opts)
 	end
 
 	local designer = nil
-	local function on_key(key)
+	local function on_key(key, scan, is_repeat)
+		if is_repeat then return end
 		if key ~= opts.key then return end
 		if opts.reload_tools then
 			reload_tools()
