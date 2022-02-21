@@ -23,6 +23,48 @@ function Port:new(p, connect_func)
 	return o
 end
 
+local ArrayPort = {}
+function ArrayPort:new(p)
+	local o = {
+		minx = p.x,
+		maxx = p.x,
+		miny = p.y,
+		maxy = p.y,
+	}
+	setmetatable(o, self)
+	self.__index = self
+	return o
+end
+
+function ArrayPort:check_horz()
+	assert(self.miny == self.maxy, 'array port is not a horizontal line')
+end
+function ArrayPort:check_vert()
+	assert(self.minx == self.maxx, 'array port is not a vertical line')
+end
+function ArrayPort:nw() return Point:new(self.minx, self.miny) end
+function ArrayPort:ne() return Point:new(self.maxx, self.miny) end
+function ArrayPort:sw() return Point:new(self.minx, self.maxy) end
+function ArrayPort:se() return Point:new(self.maxx, self.maxy) end
+function ArrayPort:n() self:check_vert(); return self:nw() end
+function ArrayPort:s() self:check_vert(); return self:sw() end
+function ArrayPort:w() self:check_horz(); return self:nw() end
+function ArrayPort:e() self:check_horz(); return self:ne() end
+
+function ArrayPort:expand(p)
+	self.minx = math.min(self.minx, p.x)
+	self.maxx = math.max(self.maxx, p.x)
+	self.miny = math.min(self.miny, p.y)
+	self.maxy = math.max(self.maxy, p.y)
+end
+
+function ArrayPort:translate(p)
+	self.minx = self.minx + p.x
+	self.maxx = self.maxx + p.x
+	self.miny = self.miny + p.y
+	self.maxy = self.maxy + p.y
+end
+
 local Schematic = {}
 function Schematic:new()
 	local o = {
@@ -243,6 +285,17 @@ function Designer:port_alias(opts)
 			orig.connect_func(args)
 		end)
 	end}
+end
+
+function Designer:array_port(opts)
+	opts = self:opts_pos(opts)
+	local schem = self:top()
+	local existing_val = self:get_var_raw(opts.v)
+	if existing_val ~= nil then
+		existing_val:expand(opts.p)
+		return
+	end
+	self:set_var(opts.v, ArrayPort:new(opts.p))
 end
 
 function Designer:begin_schem()
@@ -617,6 +670,9 @@ function Designer:place_schem(child_schem, opts)
 			for name, val in pairs(child_schem.vars) do
 				if getmetatable(val) == Port then
 					val.p = opts.p:add(val.p)
+				end
+				if getmetatable(val) == ArrayPort then
+					val:translate(opts.p)
 				end
 				name = self:expand_var_name(name)
 				schem.vars[name] = val

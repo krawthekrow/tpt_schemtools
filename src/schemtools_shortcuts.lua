@@ -72,6 +72,7 @@ function Shortcuts.init(designer)
 	expose_designer_method('chain', 'run_with_curs')
 	expose_designer_method('findpt', 'solve_constraints')
 	expose_designer_method('tsetup', 'test_setup')
+	expose_designer_method('aport', 'array_port')
 
 	local function array(opts)
 		if opts.from ~= nil then opts.p = opts.from end
