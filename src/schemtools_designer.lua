@@ -533,6 +533,7 @@ function Designer:part(opts)
 	parse_custom('to', 'dtec', 'tmp2', prop_dtec_to)
 	parse_custom('mode', 'filt', 'tmp', prop_filt_mode)
 	parse_custom('sticky', 'frme', 'tmp', prop_frme_sticky)
+	parse_custom('cap', 'pstn', 'tmp', prop_id)
 
 	-- custom default values
 	local function default_prop(target_type, prop, val)
