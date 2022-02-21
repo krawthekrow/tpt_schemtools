@@ -1,4 +1,4 @@
-require('schem/stdlib/tests')
+require('schem/lib/tests')
 
 local function scratch(SchemTools)
 	-- shr_1_tb()

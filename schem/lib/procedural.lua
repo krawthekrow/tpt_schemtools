@@ -1,4 +1,4 @@
-require('schem/stdlib/core')
+require('schem/lib/core')
 
 function shr_1(opts)
 	if opts.wordsz == nil then opts.wordsz = 29 end

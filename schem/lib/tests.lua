@@ -1,10 +1,10 @@
-require('schem/stdlib/core')
-require('schem/stdlib/testlib')
+require('schem/lib/core')
+require('schem/lib/testlib')
 
-require('schem/stdlib/fram1d')
-require('schem/stdlib/procedural')
-require('schem/stdlib/vram56')
-require('schem/stdlib/spu56')
+require('schem/lib/fram1d')
+require('schem/lib/procedural')
+require('schem/lib/vram56')
+require('schem/lib/spu56')
 
 function shr_1_tb()
 	schem{

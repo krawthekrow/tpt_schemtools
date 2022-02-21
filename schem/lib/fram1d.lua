@@ -1,4 +1,4 @@
-require('schem/stdlib/core')
+require('schem/lib/core')
 
 function pstn_demux_e(opts)
 	opts = opts_bool(opts, 'detach_pscn_placer', false)

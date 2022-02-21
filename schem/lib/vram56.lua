@@ -1,4 +1,4 @@
-require('schem/stdlib/core')
+require('schem/lib/core')
 
 local function vram56_reader(opts)
 end

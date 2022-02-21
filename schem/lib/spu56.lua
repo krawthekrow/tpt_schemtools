@@ -1,5 +1,5 @@
-require('schem/stdlib/core')
-require('schem/stdlib/fram1d')
+require('schem/lib/core')
+require('schem/lib/fram1d')
 
 local function build_extension_map(start_off)
 	local extension_map = {}
