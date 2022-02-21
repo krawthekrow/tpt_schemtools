@@ -329,6 +329,10 @@ end
 function Designer:advance_curs(opts)
 	local schem = self:top()
 	opts = self:opts_pt_short(opts, self:get_curs_info().adv)
+	if opts.n ~= nil then
+		opts.p.x = opts.p.x * opts.n
+		opts.p.y = opts.p.y * opts.n
+	end
 	self:set_curs({ p = self:get_curs():add(opts.p) })
 end
 
