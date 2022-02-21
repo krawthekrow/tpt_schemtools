@@ -45,6 +45,7 @@ function Shortcuts.init(designer)
 	local designer_methods_to_expose = {
 		'opts_bool',
 		'opts_pos',
+		'opts_aport',
 		'port',
 		'port_alias',
 		'connect',
@@ -53,6 +54,7 @@ function Shortcuts.init(designer)
 		'clear',
 		'plot',
 		'get_orth_dist',
+		'get_orth_dir',
 		'get_dtec_dist',
 		'pconfig',
 	}

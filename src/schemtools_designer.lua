@@ -36,11 +36,21 @@ function ArrayPort:new(p)
 	return o
 end
 
+function ArrayPort:clone(old)
+	local o = {}
+	for k, v in pairs(old) do o[k] = v end
+	setmetatable(o, self)
+	self.__index = self
+	return o
+end
+
+function ArrayPort:is_horz() return self.miny == self.maxy end
+function ArrayPort:is_vert() return self.minx == self.maxx end
 function ArrayPort:check_horz()
-	assert(self.miny == self.maxy, 'array port is not a horizontal line')
+	assert(self:is_horz(), 'array port is not a horizontal line')
 end
 function ArrayPort:check_vert()
-	assert(self.minx == self.maxx, 'array port is not a vertical line')
+	assert(self:is_vert(), 'array port is not a vertical line')
 end
 function ArrayPort:nw() return Point:new(self.minx, self.miny) end
 function ArrayPort:ne() return Point:new(self.maxx, self.miny) end
@@ -278,8 +288,13 @@ end
 
 function Designer:port_alias(opts)
 	local schem = self:top()
-	local ctx, _ = self:parse_full_var_name(opts.from)
+	local ctx, name = self:parse_full_var_name(opts.from)
 	local orig = self:get_var_raw(opts.from)
+	if opts.to == nil then opts.to = name end
+	if getmetatable(orig) == ArrayPort then
+		self:set_var(opts.to, ArrayPort:clone(orig))
+		return
+	end
 	self:port{v=opts.to, p=orig.p, f=function(args)
 		self:run_with_ctx(ctx, function()
 			orig.connect_func(args)
@@ -465,6 +480,31 @@ local function custom_elem_match(t, target_type)
 	return t == elem[Util.ELEM_PREFIX .. target_type:upper()]
 end
 
+function Designer:opts_aport(opts, aport_name, s_name, e_name, ref)
+	if ref == nil then ref = self:get_curs() end
+	if opts[aport_name] == nil then return opts end
+	local aport = opts[aport_name]
+	if getmetatable(aport) ~= ArrayPort then return opts end
+	local is_horz = aport:is_horz()
+	local is_vert = aport:is_vert()
+	assert(
+		(is_horz and not is_vert) or (is_vert and not is_horz),
+		'array port not linear'
+	)
+	local pt1, pt2 = nil, nil
+	if is_horz then pt1, pt2 = aport:w(), aport:e() end
+	if is_vert then pt1, pt2 = aport:n(), aport:s() end
+	local dist1 = self:get_orth_dist(ref, pt1)
+	local dist2 = self:get_orth_dist(ref, pt2)
+	if dist1 < dist2 then
+		opts[s_name], opts[e_name] = pt1, pt2
+	else
+		opts[s_name], opts[e_name] = pt2, pt1
+	end
+	opts[aport_name] = nil
+	return opts
+end
+
 function Designer:opts_part(opts)
 	opts = self:opts_pos(opts)
 
@@ -487,27 +527,8 @@ function Designer:opts_part(opts)
 	end
 
 	local function expand_aport(target_type, aport_name, s_name, e_name)
-		if opts[aport_name] == nil then return end
 		if not custom_elem_match(t, target_type) then return end
-		local aport = opts[aport_name]
-		if getmetatable(aport) ~= ArrayPort then return end
-		local is_horz = aport.miny == aport.maxy
-		local is_vert = aport.minx == aport.maxx
-		assert(
-			(is_horz and not is_vert) or (is_vert and not is_horz),
-			'array port not linear'
-		)
-		local pt1, pt2 = nil, nil
-		if is_horz then pt1, pt2 = aport:w(), aport:e() end
-		if is_vert then pt1, pt2 = aport:n(), aport:s() end
-		local dist1 = self:get_orth_dist(opts.from, pt1)
-		local dist2 = self:get_orth_dist(opts.from, pt2)
-		if dist1 < dist2 then
-			opts[s_name], opts[e_name] = pt1, pt2
-		else
-			opts[s_name], opts[e_name] = pt2, pt1
-		end
-		opts[aport_name] = nil
+		opts = self:opts_aport(opts, aport_name, s_name, e_name, opts.from)
 	end
 	expand_aport('cray', 'to', 's', 'e')
 	expand_aport('dray', 'to', 'tos', 'toe')
