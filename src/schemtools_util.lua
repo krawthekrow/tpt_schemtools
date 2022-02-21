@@ -107,4 +107,12 @@ Util.FILT_MODES = {
 	SHRV = 11,
 }
 
+Util.CONDUCTORS = {
+	elem.DEFAULT_PT_METL,
+	elem.DEFAULT_PT_INWR,
+	elem.DEFAULT_PT_PSCN,
+	elem.DEFAULT_PT_NSCN,
+	elem.DEFAULT_PT_INST,
+}
+
 return Util

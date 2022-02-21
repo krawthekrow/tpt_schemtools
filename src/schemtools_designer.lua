@@ -39,6 +39,10 @@ function Schematic:new()
 end
 
 function Schematic:place_parts(p, parts, under)
+	for _, part in ipairs(parts) do
+		part.x = p.x
+		part.y = p.y
+	end
 	if self.parts[p.y] == nil then
 		self.parts[p.y] = {}
 	end
@@ -395,11 +399,17 @@ function Designer:get_dtec_dist(from, to)
 	return math.max(math.abs(dp.x), math.abs(dp.y))
 end
 
-function Designer:part(opts)
+-- custom prop names
+local function custom_elem_match(t, target_type)
+	if target_type == 'any' then return true end
+	if target_type == 'conduct' then
+		return Util.arr_contains(Util.CONDUCTORS, t)
+	end
+	return t == elem[Util.ELEM_PREFIX .. target_type:upper()]
+end
+
+function Designer:opts_part(opts)
 	opts = self:opts_pos(opts)
-	opts = self:opts_bool(opts, 'done', true)
-	opts = self:opts_bool(opts, 'ss', false)
-	opts = self:opts_bool(opts, 'under', false)
 
 	if opts.elem_name ~= nil then
 		opts['type'] = decode_elem(opts.elem_name)
@@ -411,28 +421,10 @@ function Designer:part(opts)
 		elem.DEFAULT_PT_DRAY,
 	}
 
-	local curs = self:get_curs()
 	local do_orth_pos = Util.arr_contains(orth_pos_enabled, t)
 	if do_orth_pos then
-		opts = self:opts_pt(opts, 'from', 'fromx', 'fromy', curs)
+		opts = self:opts_pt(opts, 'from', 'fromx', 'fromy', opts.p)
 		opts = self:opts_pt(opts, 'to', 'tox', 'toy', opts.from, false)
-	end
-
-	local conductors = {
-		elem.DEFAULT_PT_METL,
-		elem.DEFAULT_PT_INWR,
-		elem.DEFAULT_PT_PSCN,
-		elem.DEFAULT_PT_NSCN,
-		elem.DEFAULT_PT_INST,
-	}
-
-	-- custom prop names
-	local function custom_elem_match(target_type)
-		if target_type == 'any' then return true end
-		if target_type == 'conduct' then
-			return Util.arr_contains(conductors, t)
-		end
-		return t == elem[Util.ELEM_PREFIX .. target_type:upper()]
 	end
 
 	local function calc_r(target_type, from_name, to_name)
@@ -445,7 +437,7 @@ function Designer:part(opts)
 
 	local function parse_custom(custom_prop, target_type, prop, func)
 		if opts[custom_prop] == nil then return end
-		if custom_elem_match(target_type) then
+		if custom_elem_match(t, target_type) then
 			opts[prop] = func(opts[custom_prop])
 		end
 	end
@@ -535,9 +527,40 @@ function Designer:part(opts)
 	parse_custom('sticky', 'frme', 'tmp', prop_frme_sticky)
 	parse_custom('cap', 'pstn', 'tmp', prop_id)
 
+	if opts.temp ~= nil then
+		assert(opts.temp >= 0, 'temp must be at least 0K')
+	end
+
+	return opts
+end
+
+local function config_part(part, opts)
+	for field_name, _ in pairs(PART_FIELDS) do
+		local val = opts[field_name]
+		if val ~= nil then
+			part[field_name] = val
+		end
+	end
+end
+
+function Designer:pconfig(opts)
+	for k, v in pairs(opts.part) do
+		opts[k] = v
+	end
+	opts = self:opts_part(opts)
+	config_part(opts.part, opts)
+end
+
+function Designer:part(opts)
+	opts = self:opts_part(opts)
+	opts = self:opts_bool(opts, 'done', true)
+	opts = self:opts_bool(opts, 'under', false)
+
+	local t = opts['type']
+
 	-- custom default values
 	local function default_prop(target_type, prop, val)
-		if custom_elem_match(target_type) and opts[prop] == nil then
+		if custom_elem_match(t, target_type) and opts[prop] == nil then
 			opts[prop] = val
 		end
 	end
@@ -547,24 +570,15 @@ function Designer:part(opts)
 
 	if opts.sprk then
 		-- pre-spark
-		assert(Util.arr_contains(conductors, t))
+		assert(Util.arr_contains(Util.CONDUCTORS, t))
 		opts.ctype = t
 		opts['type'] = elem.DEFAULT_PT_SPRK
 		if opts.life == nil then opts.life = 4 end
 	end
 
-	if opts.temp ~= nil then
-		assert(opts.temp >= 0, 'temp must be at least 0K')
-	end
-
 	lazy_init_part_fields()
 	local part = {}
-	for field_name, _ in pairs(PART_FIELDS) do
-		local val = opts[field_name]
-		if val ~= nil and field_name ~= 'x' and field_name ~= 'y' then
-			part[field_name] = val
-		end
-	end
+	config_part(part, opts)
 
 	if opts.v ~= nil then self:set_var(opts.v, part) end
 
@@ -726,7 +740,7 @@ function Designer:plot_schem(opts)
 		local id = sim.partCreate(-3, x, y, t)
 		for field_name, _ in pairs(PART_FIELDS) do
 			local val = part[field_name]
-			if val ~= nil then
+			if field_name ~= 'x' and field_name ~= 'y' and val ~= nil then
 				local field_id = sim[Util.FIELD_PREFIX .. field_name:upper()]
 				sim.partProperty(id, field_id, val)
 			end

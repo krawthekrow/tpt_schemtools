@@ -54,6 +54,7 @@ function Shortcuts.init(designer)
 		'plot',
 		'get_orth_dist',
 		'get_dtec_dist',
+		'pconfig',
 	}
 	for _, method in ipairs(designer_methods_to_expose) do
 		expose_designer_method(method)
