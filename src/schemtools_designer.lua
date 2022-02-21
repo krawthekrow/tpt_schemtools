@@ -473,20 +473,50 @@ function Designer:opts_part(opts)
 	end
 	local t = opts['type']
 
-	local orth_pos_enabled = {
+	local from_to_pos_enabled = {
 		elem.DEFAULT_PT_CRAY,
 		elem.DEFAULT_PT_DRAY,
+		elem.DEFAULT_PT_LDTC,
+		elem.DEFAULT_PT_DTEC,
 	}
 
-	local do_orth_pos = Util.arr_contains(orth_pos_enabled, t)
-	if do_orth_pos then
+	local do_from_to_pos = Util.arr_contains(from_to_pos_enabled, t)
+	if do_from_to_pos then
 		opts = self:opts_pt(opts, 'from', 'fromx', 'fromy', opts.p)
 		opts = self:opts_pt(opts, 'to', 'tox', 'toy', opts.from, false)
 	end
 
-	local function calc_r(target_type, from_name, to_name)
-		if opts[from_name] == nil or opts[to_name] == nil then return end
-		opts.r = self:get_orth_dist(opts[from_name], opts[to_name]) + 1
+	local function expand_aport(target_type, aport_name, s_name, e_name)
+		if opts[aport_name] == nil then return end
+		if not custom_elem_match(t, target_type) then return end
+		local aport = opts[aport_name]
+		if getmetatable(aport) ~= ArrayPort then return end
+		local is_horz = aport.miny == aport.maxy
+		local is_vert = aport.minx == aport.maxx
+		assert(
+			(is_horz and not is_vert) or (is_vert and not is_horz),
+			'array port not linear'
+		)
+		local pt1, pt2 = nil, nil
+		if is_horz then pt1, pt2 = aport:w(), aport:e() end
+		if is_vert then pt1, pt2 = aport:n(), aport:s() end
+		local dist1 = self:get_orth_dist(opts.from, pt1)
+		local dist2 = self:get_orth_dist(opts.from, pt2)
+		if dist1 < dist2 then
+			opts[s_name], opts[e_name] = pt1, pt2
+		else
+			opts[s_name], opts[e_name] = pt2, pt1
+		end
+		opts[aport_name] = nil
+	end
+	expand_aport('cray', 'to', 's', 'e')
+	expand_aport('dray', 'to', 'tos', 'toe')
+	expand_aport('ldtc', 'to', 's', 'e')
+
+	local function calc_r(target_type, s_name, e_name)
+		if opts[s_name] == nil or opts[e_name] == nil then return end
+		if not custom_elem_match(t, target_type) then return end
+		opts.r = self:get_orth_dist(opts[s_name], opts[e_name]) + 1
 	end
 	calc_r('cray', 's', 'e')
 	calc_r('dray', 'tos', 'toe')
@@ -494,9 +524,8 @@ function Designer:opts_part(opts)
 
 	local function parse_custom(custom_prop, target_type, prop, func)
 		if opts[custom_prop] == nil then return end
-		if custom_elem_match(t, target_type) then
-			opts[prop] = func(opts[custom_prop])
-		end
+		if not custom_elem_match(t, target_type) then return end
+		opts[prop] = func(opts[custom_prop])
 	end
 	local function prop_id(x) return x end
 	local function prop_pstn_r(x)
@@ -507,33 +536,30 @@ function Designer:opts_part(opts)
 		return x
 	end
 	local function prop_cray_start(s)
-		if opts.from == nil then opts.from = opts.p end
 		local j = self:get_orth_dist(opts.from, s) - 1
 		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
 	local function prop_dray_start(s)
-		if opts.from == nil then opts.from = opts.p end
+		if opts.tmp == nil then opts.tmp = 1 end
 		local j = self:get_orth_dist(opts.from, s) - opts.tmp - 1
 		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
 	local function prop_cray_end(e)
-		if opts.from == nil then opts.from = opts.p end
+		if opts.tmp == nil then opts.tmp = 1 end
 		local j = self:get_orth_dist(opts.from, e) - opts.tmp
 		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
 	local function prop_dray_end(e)
-		if opts.from == nil then opts.from = opts.p end
+		if opts.tmp == nil then opts.tmp = 1 end
 		local j = self:get_orth_dist(opts.from, e) - opts.tmp - opts.tmp
 		self:soft_assert(j >= 0, 'negative jump requested')
 		return j
 	end
 	local function prop_dtec_to(to)
-		if opts.from == nil then opts.from = opts.p end
-		local r = self:get_dtec_dist(opts.from, to)
-		return r
+		return self:get_dtec_dist(opts.from, to)
 	end
 	local function prop_filt_mode(s)
 		local filt_mode_names = {
@@ -584,9 +610,34 @@ function Designer:opts_part(opts)
 	parse_custom('sticky', 'frme', 'tmp', prop_frme_sticky)
 	parse_custom('cap', 'pstn', 'tmp', prop_id)
 
-	if opts.temp ~= nil then
-		assert(opts.temp >= 0, 'temp must be at least 0K')
+	local function check_geq(target_type, prop_name, bound)
+		if bound == nil then bound = 0 end
+		if not custom_elem_match(t, target_type) then return end
+		if opts[prop_name] == nil then return end
+		self:soft_assert(
+			opts[prop_name] >= bound,
+			prop_name .. ' must be at least ' .. bound ..
+			' but ' .. opts[prop_name] .. ' requested'
+		)
 	end
+	local function check_leq(target_type, prop_name, bound)
+		if bound == nil then bound = 0 end
+		if not custom_elem_match(t, target_type) then return end
+		if opts[prop_name] == nil then return end
+		self:soft_assert(
+			opts[prop_name] <= bound,
+			prop_name .. ' must be at most ' .. bound ..
+			' but ' .. opts[prop_name] .. ' requested'
+		)
+	end
+	check_geq('any', 'temp', 0)
+	check_leq('dtec', 'tmp2', 25)
+	check_geq('cray', 'tmp', 0)
+	check_geq('dray', 'tmp', 0)
+	check_geq('ldtc', 'tmp', 0)
+	check_geq('cray', 'tmp2', 0)
+	check_geq('dray', 'tmp2', 0)
+	check_geq('ldtc', 'life', 0)
 
 	return opts
 end
@@ -624,6 +675,9 @@ function Designer:part(opts)
 	default_prop('filt', 'tmp', Util.FILT_MODES.NOP)
 	default_prop('aray', 'life', 1)
 	default_prop('cray', 'ctype', elem.DEFAULT_PT_SPRK)
+	default_prop('cray', 'tmp', 1)
+	default_prop('dray', 'tmp', 1)
+	default_prop('ldtc', 'tmp', 1)
 
 	if opts.sprk then
 		-- pre-spark
