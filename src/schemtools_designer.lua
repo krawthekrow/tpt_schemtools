@@ -434,6 +434,15 @@ function Designer:part(opts)
 		end
 		return t == elem[Util.ELEM_PREFIX .. target_type:upper()]
 	end
+
+	local function calc_r(target_type, from_name, to_name)
+		if opts[from_name] == nil or opts[to_name] == nil then return end
+		opts.r = self:get_orth_dist(opts[from_name], opts[to_name]) + 1
+	end
+	calc_r('cray', 's', 'e')
+	calc_r('dray', 'tos', 'toe')
+	calc_r('ldtc', 's', 'e')
+
 	local function parse_custom(custom_prop, target_type, prop, func)
 		if opts[custom_prop] == nil then return end
 		if custom_elem_match(target_type) then
