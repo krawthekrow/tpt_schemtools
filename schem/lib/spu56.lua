@@ -143,9 +143,10 @@ local function spu56_hshift_demux(opts)
 			-- we want the BRAY to persist to the next frame so that the
 			-- resetter CRAY always deletes the same number of particles
 			aray{life=2, done=0}; ssconv{t='inwr'}
-			filt{mode='set', ct=shl(1, bit_offs[i])}
 			aport{v='addrrow'}
-			filt{mode='and'}
+			filt{mode='set'}
+			aport{v='androw'}
+			filt{mode='and', ct=shl(1, bit_offs[i])}
 			aport{v='pstnrow'}
 			insl{}
 			aport{v='bray_blocker'}
@@ -154,13 +155,14 @@ local function spu56_hshift_demux(opts)
 	end}
 
 	port{v='pstn_head', p=v('pstnrow'):w():left()}
-	port{v='pstn_tail', p=v('pstnrow'):w():right()}
+	port{v='pstn_tail', p=v('pstnrow'):e():right()}
 
-	-- The PSTN placer has an inverting step and a filling step.
-	-- In the inverting step, r=0 PSTNs are placed in empty spaces
-	-- while BRAYs are deleted.
-	-- In the filling step, binary-r PSTNs are placed in the now
-	-- empty spaces (previously BRAYs).
+	-- The PSTN placer has three steps:
+	-- Clearing step: PSTNs from the previous frame are cleared.
+	-- Inverting step: r=0 PSTNs are placed in empty spaces while BRAYs
+	-- are deleted.
+	-- Filling step: binary-r PSTNs are placed in the now empty spaces
+	-- (previously BRAYs).
 	port{v='make_pstn_placer', f=function(opts)
 		port{v='pstn_placer_e', p=findpt{ns=opts.p, w=v('pstnrow'):w()}}
 
@@ -186,6 +188,32 @@ local function spu56_hshift_demux(opts)
 			ssconv{t='pscn', oy=1}
 			port{v='pstn_inverter_w'}
 			pscn{sprk=1}
+
+			dmnd{}
+			port{v='cray_target'}
+			port{
+				v='resetter_apom_s',
+				p=findpt{n=v('cray_target'), w=v('arayrow'):w()}
+			}
+			chain{dy=-1, p=v('resetter_apom_s'), done=0, f=function()
+				port{v='apom_cray_id_holder'}
+				insl{}
+				cray{from=v('cray_target'), to=v('pstnrow')}
+				cray{to=v('apom_cray_id_holder'), done=0}
+				dray{to=v('cray_target'), done=0}
+				ssconv{t='pscn'}
+				pscn{sprk=1}
+			end}
+			chain{dy=1, oy=1, f=function()
+				adv{}
+				dray{to=v('cray_target'), done=0}
+				cray{ct='insl', to=v('apom_cray_id_holder'), done=0}
+				ssconv{t='pscn'}
+				pscn{sprk=1}
+			end}
+			ssconv{t='pscn', done=0}
+			port{v='pstn_placer_w'}
+			pscn{sprk=1}
 		end}
 	end}
 end
@@ -208,6 +236,13 @@ local function spu56_rmask_hshift_demux(opts)
 	--
 	-- Optionally offset the BRAY rows by adding two INSLs to the
 	-- piston head's second row and changing extension by two.
+	--
+	-- In total, this setup carries out four steps:
+	-- 1. Retract the piston fully to reset.
+	-- 2. Extend the rmask.
+	-- 3. After the ARAYs fire, extend the piston all the way.
+	-- 4. Retract according to hshift.
+
 	port{v='brayrow_e'}
 	chain{dx=1, p=v('brayrow_e'):right(), f=function()
 		port{v='opt_insl_w'}
@@ -227,12 +262,61 @@ local function spu56_rmask_hshift_demux(opts)
 		p=v('rmask_demux_head'),
 		ref='pstn_head',
 	}
+	local cum_piston_r = v('rmask_demux.piston_r')
 
+	-- sparker for optional offset PSTN
 	-- will be resparked by the APOM mechanism from rmask_demux
 	pscn{sprk=1, p=v('opt_pstn'):down(2)}
 
-	local cum_piston_r = v('rmask_demux.piston_r')
-	port{v='hshift_demux_head', p=v('rmask_demux.pstn_tail'):left()}
+	-- Bottom row starts offset right by one, and may end up offset left
+	-- by two using two INSLs for alignment. This means that we might
+	-- need to push three pixels more than the row length, or two INSLs
+	-- extra.
+	local max_extension = 56 * 2 + 3
+	local max_load = 56 * 2 + 2
+	chain{dx=1, p=v('rmask_demux.pstn_tail'), f=function()
+		port{v='extender_pstn_target'}
+		port{v='extender_sparker', oy=-1}
+		pscn{sprk=1, p=v('extender_sparker'), done=0}
+		-- TODO: manual temporary position
+		-- APOM setter for the extender PSTN
+		chain{dy=-1, oy=-6, f=function()
+			-- push as far as possible, including possible offset by three
+			pstn{r=max_extension - cum_piston_r, cap=max_load, ct='dmnd'}
+			cum_piston_r = max_extension
+			cray{v='extender_pstn_id_grabber', done=0}
+			dray{to=v('extender_pstn_target'), done=0}
+			ssconv{t='pscn'}
+			pscn{sprk=1}
+		end}
+
+		port{v='retractor_pstn_target'}
+		-- APOM setter for the retractor PSTN
+		chain{dx=1, dy=-1, ox=1, oy=-1, f=function()
+			port{v='retractor_pstn_id_holder'}
+			insl{}
+			adv{} -- make space for temporary FILT feed into hshift addr_in
+			-- retract as far as possible, using extension from the extender
+			pstn{r=0, ct='crmc', cap=max_load}
+			cray{to=v('retractor_pstn_id_holder'), done=0}
+			dray{to=v('retractor_pstn_target'), done=0}
+			ssconv{t='pscn'}
+			pscn{sprk=1}
+		end}
+
+		-- cancel the lmask piston extensions so that hshift extension
+		-- reflects the value sent into hshift_demux
+		while true do
+			if cum_piston_r <= 27 then
+				port{v='hshift_demux_head'}
+				pstn{r=-cum_piston_r}
+				cum_piston_r = 0
+				break
+			end
+			pstn{r=-27}
+			cum_piston_r = cum_piston_r - 27
+		end
+	end}
 
 	schem{
 		f=spu56_hshift_demux,
@@ -240,11 +324,98 @@ local function spu56_rmask_hshift_demux(opts)
 		p=v('hshift_demux_head'),
 		ref='pstn_head',
 	}
+	-- TODO: temporarily share addr_in for rmask and hshift
+	array{
+		from=v('rmask_demux.addrrow'):e():right(),
+		to=v('hshift_demux.addrrow'):w():left(),
+		f=function() filt{} end,
+	}
+
+	-- APOM to perform the hshift retraction
+	chain{dx=1, p=v('hshift_demux.pstn_tail'), f=function()
+		-- INSL is necessary to block the CONV from the PSCN placer
+		port{v='hshift_pstn_target'}; insl{done=0}
+		port{v='conv_blocker_id_holder', ox=-1, oy=1}
+		nscn{sprk=1, oy=2, done=0}
+		setv('hshift_pstn_r', -cum_piston_r)
+		-- APOM setter for the hshift PSTN
+		chain{dx=1, dy=-1, ox=2, oy=-2, f=function()
+			pstn{r=v('hshift_pstn_r'), ct='crmc', cap=max_load}
+			-- move the INSL to conv_blocker_id_holder
+			cray{r=2, to=v('hshift_pstn_target'), ct='insl', done=0}
+			cray{v='hshift_pstn_id_grabber', done=0}
+			dray{to=v('hshift_pstn_target'), done=0}
+			-- prevent resparker from resparking ARAY activators
+			ssconv{t='pscn', ox=2}
+			pscn{sprk=1}
+		end}
+		cum_piston_r = 0
+
+		dmnd{}
+	end}
+
+	-- APOM resetters for hshift, extender and retractor PSTNs
+	-- connect position should be ARAY row
+	port{v='make_apom_resetter', f=function(opts)
+		-- TODO: temporary positions
+
+		-- this needs to be after piston has been extended
+		setv(
+			'apom_hshift_pstn_ne',
+			findpt{ew=opts.p:down(), sw=v('hshift_pstn_target')}
+		)
+		chain{dx=-1, dy=1, p=v('apom_hshift_pstn_ne'), f=function()
+			port{v='hshift_pstn_id_holder'}
+			insl{}
+			pconfig{
+				part=v('hshift_pstn_id_grabber'),
+				to=v('hshift_pstn_id_holder')
+			}
+			cray{to=v('hshift_pstn_target'), done=0}
+			cray{to=v('hshift_pstn_id_holder'), ct='insl', done=0}
+			-- move the INSL back
+			cray{r=2, to=v('conv_blocker_id_holder'), ct='insl', done=0}
+			ssconv{t='pscn'}
+			pscn{sprk=1}
+		end}
+
+		-- this needs to be after the lmask PSTN has retracted
+		setv(
+			'apom_extender_pstn_n',
+			findpt{ew=opts.p:down(), s=v('extender_pstn_target')}
+		)
+		chain{dy=1, p=v('apom_extender_pstn_n'), f=function()
+			port{v='extender_pstn_id_holder'}
+			insl{}
+			pconfig{
+				part=v('extender_pstn_id_grabber'),
+				to=v('extender_pstn_id_holder')
+			}
+			cray{to=v('extender_pstn_target'), done=0}
+			cray{to=v('extender_pstn_id_holder'), ct='insl', done=0}
+			ssconv{t='pscn'}
+			pscn{sprk=1}
+		end}
+
+		-- This needs to be before lmask/rmask extends.
+		-- The PSTN can only be cleared after the hshift step since
+		-- it is necessary to form a contiguous piston.
+		setv(
+			'apom_retractor_pstn_n',
+			findpt{ew=opts.p:down(2), sw=v('retractor_pstn_target')}
+		)
+		chain{dx=-1, dy=1, p=v('apom_retractor_pstn_n'), f=function()
+			cray{to=v('retractor_pstn_target'), done=0}
+			cray{to=v('retractor_pstn_id_holder'), ct='insl', done=0}
+			ssconv{t='pscn'}
+			pscn{sprk=1}
+		end}
+	end}
 
 	-- leave it to parent to make pscn placer, in order to combine
 	-- with the pscn placer for the lmask demux
 	port_alias{from='rmask_demux.pscnrow', to='rmask_pscnrow'}
-	port{v='pscn_placer_wbnd', p=v('hshift_demux.addrrow'):e():right()}
+	port{v='pscn_placer_wbnd', p=v('hshift_demux.androw'):e():right()}
 
 	-- TODO: reset opt_pstn
 
@@ -255,7 +426,7 @@ local function spu56_rmask_hshift_demux(opts)
 		port_alias{from='hshift_demux.filler_template'}
 
 		-- optionally offset BRAY rows
-		chain{dx=-1, p=v('hshift_demux.pstn_inverter_w'):left(2), f=function()
+		chain{dx=-1, p=v('hshift_demux.pstn_placer_w'):left(), f=function()
 			local offset_amount = 2
 			pstn{
 				r=v('rmask_demux.first_pstn_r') - (offset_amount + 1),
@@ -342,12 +513,20 @@ function spu56()
 		v='rmask_hshift_demux.make_left_modules',
 		p=v('lmask_demux.pstn_tail')
 	}
+	connect{
+		v='rmask_hshift_demux.make_apom_resetter',
+		p=v('arayrow'):w(),
+	}
 	-- block the lmask PSTN from here instead
 	dmnd{p=v('rmask_hshift_demux.filler_template'):w():left()}
 
-	-- TODO: make combined PSCN placer for both lmask and rmask demuxes
+	-- combined PSCN placer for both lmask and rmask demuxes
 	chain{dx=1, p=v('rmask_hshift_demux.pscn_placer_wbnd'), f=function()
-		for i = 1, 3 do pscn{sprk=1} end
+		conv{from='sprk', to='pscn', oy=1, under=1, done=0}
+		pscn{sprk=1}
+		ssconv{t='pscn', oy=1, under=1, done=0}
+		pscn{sprk=1}
+		pscn{sprk=1}
 		adv{}
 		stacked_dray{
 			off=1, r=3, to=v('rmask_hshift_demux.rmask_pscnrow'), done=0
