@@ -1,5 +1,5 @@
-local Util = require('schemtools_util')
-local Geom = require('schemtools_geom')
+local Util = require('schemtools/util')
+local Geom = require('schemtools/geom')
 
 local Shortcuts = {
 	globals = {},

@@ -1,4 +1,4 @@
-local Util = require('schemtools_util')
+local Util = require('schemtools/util')
 
 local Tester = {}
 function Tester:new()

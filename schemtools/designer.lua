@@ -1,6 +1,6 @@
-local Geom = require('schemtools_geom')
-local Util = require('schemtools_util')
-local Tester = require('schemtools_tester')
+local Geom = require('schemtools/geom')
+local Util = require('schemtools/util')
+local Tester = require('schemtools/tester')
 local Point = Geom.Point
 local Constraints = Geom.Constraints
 

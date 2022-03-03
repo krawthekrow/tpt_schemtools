@@ -1,5 +1,20 @@
-local SCHEMTOOLS_MAIN = 'schemtools_main'
+-- expected directory structure for default settings:
+--
+-- <your powder toy directory>
+-- ├── powder
+-- ├── autorun.lua
+-- └── schemtools
+--     ├── schem
+--     │   ├── main.lua (entry point for your schematic)
+--     │   └── ...
+--     ├── schemtools
+--     │   ├── main.lua (entry point for schemtools lib)
+--     │   └── ...
+--     └── tpt_main.lua (this file)
+
 local DEFAULT_SCHEMTOOLS_PATH = 'schemtools'
+local SCHEMTOOLS_PREFIX = 'schemtools/'
+local SCHEMTOOLS_ENTRY = 'schemtools/main'
 
 local function str_startswith(str, prefix)
 	return str:sub(1, #prefix) == prefix
@@ -16,18 +31,12 @@ local function sanitize_path(path)
 end
 
 SchemTools = {
-	schemtools_path = nil,
 }
 
--- 'path' takes the path to the schemtools project directory
--- (i.e. where this file is located). Let me know if there's
--- a way to get this automatically.
-function SchemTools:new(path)
-	if path == nil then path = DEFAULT_SCHEMTOOLS_PATH end
+function SchemTools:new()
 	local o = {}
 	setmetatable(o, self)
 	self.__index = self
-	o.schemtools_path = sanitize_path(path)
 	return o
 end
 
@@ -72,15 +81,20 @@ function SchemTools:register_trigger(opts)
 		opts.reload_prefix = ''
 	end
 	if opts.use_shortcuts == nil then opts.use_shortcuts = true end
+	if opts.schemtools_path == nil then
+		opts.schemtools_path = DEFAULT_SCHEMTOOLS_PATH
+	end
+	opts.schemtools_path = sanitize_path(opts.schemtools_path)
 
 	local function reload_tools()
 		if opts.use_shortcuts and self.Main ~= nil then
 			self.Main.Shortcuts.teardown_globals()
 		end
-		unload_modules('schemtools_')
+		unload_modules(SCHEMTOOLS_PREFIX)
 		self.Main = nil
-		self.Main =
-			require_with_path(self.schemtools_path .. 'src', SCHEMTOOLS_MAIN)
+		self.Main = require_with_path(
+			opts.schemtools_path, SCHEMTOOLS_ENTRY
+		)
 	end
 
 	local designer = nil
