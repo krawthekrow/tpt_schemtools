@@ -44,7 +44,7 @@ function pstn_demux_e(opts)
 
 	local cum_piston_r = -1
 	-- piston, binary section
-	chain{dx=-1, p=v('pscnrow'):e():down(), f=function()
+	chain{dx=-1, p=v('pscnrow'):e():s(), f=function()
 		-- each PSTN's pushing power includes all the PSTNs in front of it,
 		-- so subtract the accumulated pushing power from the target
 		-- pushing power
@@ -59,7 +59,7 @@ function pstn_demux_e(opts)
 	end}
 
 	-- piston front
-	chain{dx=1, p=v('pstn_bin'):e():right(), f=function()
+	chain{dx=1, p=v('pstn_bin'):e():e(), f=function()
 		if not opts.omit_front_pstn then
 			pstn{r=0}
 		end
@@ -67,7 +67,7 @@ function pstn_demux_e(opts)
 	end}
 
 	-- piston back
-	chain{dx=-1, p=v('pstn_bin'):w():left(), f=function()
+	chain{dx=-1, p=v('pstn_bin'):w():w(), f=function()
 		port{v='pstn_target'}
 		adv{}
 		if not opts.omit_back_dmnd then
@@ -93,7 +93,7 @@ function pstn_demux_e(opts)
 		end}
 	end
 
-	port{v='pscn_placer_wbnd', p=v('pscnrow'):e():right(2)}
+	port{v='pscn_placer_wbnd', p=v('pscnrow'):e():e(2)}
 	if opts.detach_pscn_placer then
 		port{v='make_pscn_placer', f=function(opts)
 			make_pscn_placer(findpt{ns=opts.p, ei=v('pscn_placer_wbnd')}, true)
@@ -105,7 +105,7 @@ function pstn_demux_e(opts)
 	-- addr_in feed into addr row
 	port{v='ldtc_target', p=findpt{n=v('pstn_target'), w=v('addrrow'):w()}}
 	array{
-		from=v('ldtc_target'):right(), to=v('addrrow'):w():left(),
+		from=v('ldtc_target'):e(), to=v('addrrow'):w():w(),
 		f=function() filt{} end
 	}
 
@@ -120,8 +120,7 @@ function pstn_demux_e(opts)
 		pstn{r=max_extension - cum_piston_r, v='resetter_pstn'}
 		cray{r=num_segs, from=v('cray_target'), to=v('pscnrow'):w()}
 
-		port{v='apom_pstn_id_grabber_loc'}
-		cray{ v='apom_pstn_id_grabber', done=0}
+		cray{v='apom_pstn_id_grabber', done=0}
 		cray{to=v('apom_insl'), done=0}
 		cray{v='apom_ldtc_maker', ct='ldtc', to=v('ldtc_target'), done=0}
 		dray{r=2, tos=v('cray_target'), done=0}
@@ -133,12 +132,12 @@ function pstn_demux_e(opts)
 	-- This is complicated by the fact that the LDTC is created by a CRAY
 	-- through APOM. The LDTC's skip distance is configured through its
 	-- life, which is set by the CRAY's life.
-	port{v='addr_in', p=v('ldtc_target'):left(2), done=0, f=function(opts)
-		v('apom_ldtc_maker').life = get_orth_dist(v('ldtc_target'), opts.p) - 1
+	port{v='addr_in', p=v('ldtc_target'):w(2), done=0, f=function(opts)
+		v('apom_ldtc_maker').life = odist(v('ldtc_target'), opts.p) - 1
 	end}
 
 	-- sparker for the APOM'ed CRAY
-	chain{p=v('cray_target'):left(), f=function()
+	chain{p=v('cray_target'):w(), f=function()
 		ssconv{t='pscn', done=0}
 		pscn{sprk=1}
 	end}
@@ -148,7 +147,7 @@ function pstn_demux_e(opts)
 		pconfig{part=v('apom_pstn_id_grabber'), to=p}
 
 		if is_detached then
-			port{v='retractor_sparker', p=v('pstn_target'):down()}
+			port{v='retractor_sparker', p=v('pstn_target'):s()}
 			-- The retractor sparker must be positioned differently if
 			-- the APOM resetter is detached.
 			-- NSCN must be sparked only after retraction, so don't ssconv here.
@@ -187,20 +186,20 @@ function pstn_demux_e(opts)
 		end}
 	end
 
-	port{v='apom_resetter_nbnd', p=v('pstn_target'):down()}
+	port{v='apom_resetter_nbnd', p=v('pstn_target'):s()}
 	if opts.detach_apom_resetter then
 		-- allow piston to be retracted later
 		port{v='make_apom_resetter', f=function(opts)
 			-- need to leave enough space for the resetter PSTN sparker
 			make_apom_resetter(
-				findpt{ew=opts.p, si=v('apom_resetter_nbnd'):down(2)}, true
+				findpt{ew=opts.p, si=v('apom_resetter_nbnd'):s(2)}, true
 			)
 		end}
 	else
 		make_apom_resetter(v('apom_resetter_nbnd'), false)
 
 		-- spark retractor PSTN
-		chain{dy=1, p=v('pstn_target'):down(2), f=function()
+		chain{dy=1, p=v('pstn_target'):s(2), f=function()
 			nscn{sprk=1}
 			ssconv{t='nscn', under=1}
 		end}
@@ -243,19 +242,19 @@ function from1d_32(opts)
 		filt{ct=opts.init_data[i]}
 	end}
 
-	port{v='io_min_y', p=v('data_block'):w():down(2)}
+	port{v='io_min_y', p=v('data_block'):w():s(2)}
 	port{v='make_reader', f=function(opts)
 		if opts.name == nil then opts.name = 'reader' end
 		schem{
 			f=fram1d_reader,
 			v=opts.name,
-			p=findpt{s=v('data_block'):w():down(), ew=opts.p},
+			p=findpt{s=v('data_block'):w():s(), ew=opts.p},
 			ref='pstn_head',
 		}
-		port{v=opts.name .. '_pscn_placer', p=v('data_block'):e():right()}
+		port{v=opts.name .. '_pscn_placer', p=v('data_block'):e():e()}
 		connect{
 			v=opts.name .. '.make_pscn_placer',
-			p=v('data_block'):e():right()
+			p=v('data_block'):e():e()
 		}
 		port_alias{from=opts.name .. '.addr_in', to='raddr_in'}
 		port_alias{from=opts.name .. '.data_out', to='rdata_out'}

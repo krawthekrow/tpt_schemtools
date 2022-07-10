@@ -35,7 +35,7 @@ local function vram56_writer(opts)
 		end}
 	end}
 
-	chain{dx=-1, p=v('drayrow1'):w():left(), f=function()
+	chain{dx=-1, p=v('drayrow1'):w():w(), f=function()
 		-- use a large block size to make room in stack for the CONV
 		exponential_dray{
 			blocksz=8, r=56 * 2,
@@ -49,7 +49,7 @@ local function vram56_writer(opts)
 		adv{}
 		insl{} -- to be replaced with DRAY of the correct tmp2
 		for i = 1, 4 do
-			dray{to=v('drayrow1'):w():right((i-1) * 2 + 1), done=0}
+			dray{to=v('drayrow1'):w():e((i-1) * 2 + 1), done=0}
 		end
 		conv{from='sprk', to='pscn', done=0}
 		conv{from='pscn', to='sprk', oy=1}
@@ -61,7 +61,7 @@ local function vram56_writer(opts)
 		pscn{sprk=1}
 	end}
 
-	chain{dx=-1, p=v('drayrow2'):w():left(), f=function()
+	chain{dx=-1, p=v('drayrow2'):w():w(), f=function()
 		port{v='sprkrow1_seed'}
 		insl{} -- to be replaced with life=4 sparked PSCN
 		exponential_dray{
@@ -75,7 +75,7 @@ local function vram56_writer(opts)
 		conv{from='crmc', to='pscn', ox=1, oy=-1, under=1, done=0}
 		conv{from='sprk', to='crmc', ox=1, under=1}
 		for i = 1, 4 do
-			dray{r=2, to=v('drayrow2'):w():left():right((i-1) * 2), done=0}
+			dray{r=2, to=v('drayrow2'):w():w():e((i-1) * 2), done=0}
 		end
 		conv{from='sprk', to='pscn', done=0}
 		conv{from='pscn', to='sprk', oy=1}
@@ -109,7 +109,7 @@ function vram56(opts)
 		end}
 	end}
 
-	port{v='make_writer', p=v('data_block'):sw():down(), f=function(opts)
+	port{v='make_writer', p=v('data_block'):sw():s(), f=function(opts)
 		schem{
 			f=vram56_writer,
 			p=findpt{ew=opts.p, s=v('data_block'):sw()},

@@ -30,14 +30,14 @@ function shr_1(opts)
 		end}
 	end}
 
-	chain{dy=-1, p=v('arow'):n():up(), f=function()
+	chain{dy=-1, p=v('arow'):n():n(), f=function()
 		filt{}
 		port{v='a_in', f=function(opts)
 			ldtc{to=opts.p, p=v('a_in')}
 		end}
 	end}
 
-	chain{dx=-1, p=v('inslcol'):n():up(), f=function()
+	chain{dx=-1, p=v('inslcol'):n():n(), f=function()
 		insl{}
 		adv{}
 		filt{mode='set', ct=bor(ka, 1)}
@@ -53,7 +53,7 @@ function shr_1(opts)
 
 	schem{
 		f=aray_array_e,
-		p=v('core_block'):nw():left(),
+		p=v('core_block'):nw():w(),
 		ref='araycol_ne',
 		n=v('core_block'):sw().y - v('core_block'):nw().y + 1,
 	}

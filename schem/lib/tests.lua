@@ -5,6 +5,7 @@ require('schem/lib/fram1d')
 require('schem/lib/procedural')
 require('schem/lib/vram56')
 require('schem/lib/spu56')
+require('schem/lib/disp56')
 
 function shr_1_tb()
 	schem{
@@ -13,11 +14,11 @@ function shr_1_tb()
 		x=100, y=100,
 	}
 
-	port{v='a_in', p=v('shifter.a_in'):up(2)}
+	port{v='a_in', p=v('shifter.a_in'):n(2)}
 	filt{p=v('a_in'), ct=bor(ka, 30)}
 	connect{v='shifter.a_in', p=v('a_in')}
 
-	port{v='res_out', p=v('shifter.res_out'):down()}
+	port{v='res_out', p=v('shifter.res_out'):s()}
 	filt{p=v('res_out')}
 
 	tsetup{
@@ -48,7 +49,7 @@ function from1d_32_tb()
 		init_data=init_data,
 	}
 	connect{v='rom.make_reader', p=v('rom.io_min_y')}
-	port{v='addr_in', p=v('rom.raddr_in'):left(5)}
+	port{v='addr_in', p=v('rom.raddr_in'):w(5)}
 	filt{p=v('addr_in'), ct=ka}
 	connect{v='rom.raddr_in', p=v('addr_in')}
 	port_alias{from='rom.rdata_out', to='data_out'}
@@ -90,6 +91,15 @@ function vram56_tb()
 		x=100, y=100,
 		init_data=init_data,
 	}
-	connect{v='vram.make_writer', p=v('vram.data_block'):sw():down(10)}
+	connect{v='vram.make_writer', p=v('vram.data_block'):sw():s(10)}
 	plot{clear={}, run_test=0}
+end
+
+function disp56_tb()
+	schem{
+		f=disp56,
+		v='disp',
+		x=100, y=100,
+	}
+	plot{clear={w=sim.XRES/2}, run_test=0}
 end

@@ -39,7 +39,7 @@ local function spu56_rmask_demux(opts)
 
 	local cum_piston_r = -1
 	-- piston, binary section
-	chain{dx=1, p=v('pscnrow'):w():down(), f=function()
+	chain{dx=1, p=v('pscnrow'):w():s(), f=function()
 		-- each PSTN's pushing power includes all the PSTNs in front of it,
 		-- so subtract the accumulated pushing power from the target
 		-- pushing power
@@ -70,13 +70,13 @@ local function spu56_rmask_demux(opts)
 		end}
 	end
 
-	port{v='pscn_placer_wbnd', p=v('pscnrow'):e():right(2)}
+	port{v='pscn_placer_wbnd', p=v('pscnrow'):e():e(2)}
 	port{v='make_pscn_placer', f=function(opts)
 		make_pscn_placer(findpt{ns=opts.p, ei=v('pscn_placer_wbnd')})
 	end}
 
 	-- set up APOM'ed CRAY sparker
-	chain{dx=-1, p=v('pscnrow'):w():left(), f=function()
+	chain{dx=-1, p=v('pscnrow'):w():w(), f=function()
 		port{v='cray_target'}
 		adv{}
 		ssconv{t='pscn', done=0}
@@ -87,7 +87,7 @@ local function spu56_rmask_demux(opts)
 	-- set up addr_in feed
 	port{v='ldtc_target', p=findpt{n=v('cray_target'), w=v('addrrow'):w()}}
 	array{
-		from=v('addrrow'):w():left(), to=v('ldtc_target'):right(),
+		from=v('addrrow'):w():w(), to=v('ldtc_target'):e(),
 		f=function() filt{} end,
 	}
 
@@ -110,7 +110,7 @@ local function spu56_rmask_demux(opts)
 	-- resetter mechanism
 	port{
 		v='apom_resetter_n',
-		p=findpt{s=v('cray_target'), ew=v('pstn_bin'):w():down()}
+		p=findpt{s=v('cray_target'), ew=v('pstn_bin'):w():s()}
 	}
 	chain{dy=1, p=v('apom_resetter_n'), f=function()
 		-- leave space to DRAY over the CRAY
@@ -122,7 +122,7 @@ local function spu56_rmask_demux(opts)
 		pscn{sprk=1}
 	end}
 
-	port{v='pstn_head', p=v('pstn_bin'):w():left()}
+	port{v='pstn_head', p=v('pstn_bin'):w():w()}
 end
 
 local function spu56_hshift_demux(opts)
@@ -154,8 +154,8 @@ local function spu56_hshift_demux(opts)
 		end}
 	end}
 
-	port{v='pstn_head', p=v('pstnrow'):w():left()}
-	port{v='pstn_tail', p=v('pstnrow'):e():right()}
+	port{v='pstn_head', p=v('pstnrow'):w():w()}
+	port{v='pstn_tail', p=v('pstnrow'):e():e()}
 
 	-- The PSTN placer has three steps:
 	-- Clearing step: PSTNs from the previous frame are cleared.
@@ -244,7 +244,7 @@ local function spu56_rmask_hshift_demux(opts)
 	-- 4. Retract according to hshift.
 
 	port{v='brayrow_e'}
-	chain{dx=1, p=v('brayrow_e'):right(), f=function()
+	chain{dx=1, p=v('brayrow_e'):e(), f=function()
 		port{v='opt_insl_w'}
 		insl{}
 		port{v='opt_insl_e'}
@@ -266,7 +266,7 @@ local function spu56_rmask_hshift_demux(opts)
 
 	-- sparker for optional offset PSTN
 	-- will be resparked by the APOM mechanism from rmask_demux
-	pscn{sprk=1, p=v('opt_pstn'):down(2)}
+	pscn{sprk=1, p=v('opt_pstn'):s(2)}
 
 	-- Bottom row starts offset right by one, and may end up offset left
 	-- by two using two INSLs for alignment. This means that we might
@@ -326,8 +326,8 @@ local function spu56_rmask_hshift_demux(opts)
 	}
 	-- TODO: temporarily share addr_in for rmask and hshift
 	array{
-		from=v('rmask_demux.addrrow'):e():right(),
-		to=v('hshift_demux.addrrow'):w():left(),
+		from=v('rmask_demux.addrrow'):e():e(),
+		to=v('hshift_demux.addrrow'):w():w(),
 		f=function() filt{} end,
 	}
 
@@ -362,7 +362,7 @@ local function spu56_rmask_hshift_demux(opts)
 		-- this needs to be after piston has been extended
 		setv(
 			'apom_hshift_pstn_ne',
-			findpt{ew=opts.p:down(), sw=v('hshift_pstn_target')}
+			findpt{ew=opts.p:s(), sw=v('hshift_pstn_target')}
 		)
 		chain{dx=-1, dy=1, p=v('apom_hshift_pstn_ne'), f=function()
 			port{v='hshift_pstn_id_holder'}
@@ -382,7 +382,7 @@ local function spu56_rmask_hshift_demux(opts)
 		-- this needs to be after the lmask PSTN has retracted
 		setv(
 			'apom_extender_pstn_n',
-			findpt{ew=opts.p:down(), s=v('extender_pstn_target')}
+			findpt{ew=opts.p:s(), s=v('extender_pstn_target')}
 		)
 		chain{dy=1, p=v('apom_extender_pstn_n'), f=function()
 			port{v='extender_pstn_id_holder'}
@@ -402,7 +402,7 @@ local function spu56_rmask_hshift_demux(opts)
 		-- it is necessary to form a contiguous piston.
 		setv(
 			'apom_retractor_pstn_n',
-			findpt{ew=opts.p:down(2), sw=v('retractor_pstn_target')}
+			findpt{ew=opts.p:s(2), sw=v('retractor_pstn_target')}
 		)
 		chain{dx=-1, dy=1, p=v('apom_retractor_pstn_n'), f=function()
 			cray{to=v('retractor_pstn_target'), done=0}
@@ -415,7 +415,7 @@ local function spu56_rmask_hshift_demux(opts)
 	-- leave it to parent to make pscn placer, in order to combine
 	-- with the pscn placer for the lmask demux
 	port_alias{from='rmask_demux.pscnrow', to='rmask_pscnrow'}
-	port{v='pscn_placer_wbnd', p=v('hshift_demux.androw'):e():right()}
+	port{v='pscn_placer_wbnd', p=v('hshift_demux.androw'):e():e()}
 
 	-- TODO: reset opt_pstn
 
@@ -426,7 +426,7 @@ local function spu56_rmask_hshift_demux(opts)
 		port_alias{from='hshift_demux.filler_template'}
 
 		-- optionally offset BRAY rows
-		chain{dx=-1, p=v('hshift_demux.pstn_placer_w'):left(), f=function()
+		chain{dx=-1, p=v('hshift_demux.pstn_placer_w'):w(), f=function()
 			local offset_amount = 2
 			pstn{
 				r=v('rmask_demux.first_pstn_r') - (offset_amount + 1),
@@ -465,7 +465,7 @@ function spu56()
 		end}
 	end}
 
-	chain{dx=-1, p=v('brayrow1_w'):left(), f=function()
+	chain{dx=-1, p=v('brayrow1_w'):w(), f=function()
 		-- leave space as we may need to offset the bottom row left by three
 		adv{n=3}
 		-- prevent retraction from pulling BRAYs along with it
@@ -496,7 +496,7 @@ function spu56()
 	-- only pull back the CRMC
 	pconfig{part=v('lmask_demux.resetter_pstn'), cap=1}
 	-- only retract the piston after the ARAYs have been fired
-	connect{v='lmask_demux.make_apom_resetter', p=v('arayrow'):w():down()}
+	connect{v='lmask_demux.make_apom_resetter', p=v('arayrow'):w():s()}
 	-- compensate for offset space
 	pconfig{
 		part=v('lmask_demux.pstn_bin_1'),
@@ -518,7 +518,7 @@ function spu56()
 		p=v('arayrow'):w(),
 	}
 	-- block the lmask PSTN from here instead
-	dmnd{p=v('rmask_hshift_demux.filler_template'):w():left()}
+	dmnd{p=v('rmask_hshift_demux.filler_template'):w():w()}
 
 	-- combined PSCN placer for both lmask and rmask demuxes
 	chain{dx=1, p=v('rmask_hshift_demux.pscn_placer_wbnd'), f=function()
@@ -537,10 +537,10 @@ function spu56()
 
 	-- LSH mode: OR then <<<
 	-- RSH mode: >>> then XOR
-	chain{dx=-1, p=v('shiftrow1_w'):left(), f=function()
+	chain{dx=-1, p=v('shiftrow1_w'):w(), f=function()
 	end}
 
-	chain{dx=-1, p=v('shiftrow2_w'):left(), f=function()
+	chain{dx=-1, p=v('shiftrow2_w'):w(), f=function()
 	end}
 end
 

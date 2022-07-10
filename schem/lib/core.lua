@@ -10,8 +10,8 @@ function stacked_dray(opts)
 	opts = opts_bool(opts, 'done', true)
 	opts = opts_aport(opts, 'to', 's', 'e')
 	if opts.off == nil then opts.off = 0 end
-	local cover_range = get_orth_dist(opts.s, opts.e) + 1
-	local d = get_orth_dir(opts.s, opts.e)
+	local cover_range = odist(opts.s, opts.e) + 1
+	local d = odir(opts.s, opts.e)
 	local num_covered = 0
 	while true do
 		local target = opts.s:add(d:mult(num_covered - opts.off))
@@ -33,11 +33,11 @@ function exponential_dray(opts)
 	opts = opts_aport(opts, 'to', 's', 'e')
 	if opts.s ~= nil then
 		assert(
-			get_orth_dist(getcurs(), opts.s) == 1,
+			odist(getcurs(), opts.s) == 1,
 			'effect range must start next to DRAY'
 		)
 	end
-	if opts.e ~= nil then opts.r = get_orth_dist(opts.s, opts.e) + 1 end
+	if opts.e ~= nil then opts.r = odist(opts.s, opts.e) + 1 end
 	if opts.blocksz == nil then opts.blocksz = 1 end
 	if opts.nblocks ~= nil then opts.r = opts.nblocks * opts.blocksz end
 	if opts.r == nil then opts.r = 8 end
@@ -76,12 +76,12 @@ function aray_array_e(opts)
 		end
 	end}
 
-	insl{p=findpt{n=v('last_aray'), ew=v('araycol_ne'):up()}}
+	insl{p=findpt{n=v('last_aray'), ew=v('araycol_ne'):n()}}
 	-- re-spark the last outer ARAY activator manually
 	ssconv{p=v('last_aray'), t='inwr'}
 
 	-- replace all other outer ARAY activators with the re-sparked activator
-	chain{dy=1, p=v('last_aray'):down():left(), f=function()
+	chain{dy=1, p=v('last_aray'):s():w(), f=function()
 		local respark_range = opts.n
 		if opts.n % 2 == 0 then respark_range = respark_range - 1 end
 		exponential_dray{to=v('outer_sprkcol'), blocksz=2}

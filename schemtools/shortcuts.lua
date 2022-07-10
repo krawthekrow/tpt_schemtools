@@ -53,8 +53,6 @@ function Shortcuts.init(designer)
 		'place',
 		'clear',
 		'plot',
-		'get_orth_dist',
-		'get_orth_dir',
 		'get_dtec_dist',
 		'pconfig',
 	}
@@ -75,8 +73,11 @@ function Shortcuts.init(designer)
 	expose_designer_method('findpt', 'solve_constraints')
 	expose_designer_method('tsetup', 'test_setup')
 	expose_designer_method('aport', 'array_port')
+	expose_designer_method('odist', 'get_orth_dist')
+	expose_designer_method('odir', 'get_orth_dir')
 
 	local function array(opts)
+		opts = designer:opts_pos(opts)
 		if opts.from ~= nil then opts.p = opts.from end
 		if opts.to ~= nil then
 			opts.n = designer:get_orth_dist(opts.p, opts.to) + 1
@@ -85,7 +86,9 @@ function Shortcuts.init(designer)
 		local func = opts.f
 		opts.f = function()
 			for i = 1, opts.n do
-				func(i)
+				designer:run_with_curs{dx=0, dy=0, f=function()
+					func(i)
+				end}
 			end
 		end
 		designer:run_with_curs(opts)
@@ -102,6 +105,9 @@ function Shortcuts.init(designer)
 	end
 	Shortcuts.set_global('tc', test_case)
 
+	local function intdiv(x, y)
+		return (x - (x % y)) / y
+	end
 	local function ilog2(x)
 		local i = 0
 		while true do
@@ -112,6 +118,7 @@ function Shortcuts.init(designer)
 	local function bsub(x, y)
 		return bit.band(x, bit.bnot(y))
 	end
+	Shortcuts.set_global('intdiv', intdiv)
 	Shortcuts.set_global('ilog2', ilog2)
 	Shortcuts.set_global('shl', bit.lshift)
 	Shortcuts.set_global('shr', bit.rshift)

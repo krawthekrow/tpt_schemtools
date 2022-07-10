@@ -60,6 +60,8 @@ function ArrayPort:n() self:check_vert(); return self:nw() end
 function ArrayPort:s() self:check_vert(); return self:sw() end
 function ArrayPort:w() self:check_horz(); return self:nw() end
 function ArrayPort:e() self:check_horz(); return self:ne() end
+function ArrayPort:x() self:check_vert(); return self.minx end
+function ArrayPort:y() self:check_horz(); return self.miny end
 
 function ArrayPort:expand(p)
 	self.minx = math.min(self.minx, p.x)
@@ -341,8 +343,17 @@ function Designer:set_curs(opts)
 	self:get_curs_info().pos = opts.p
 end
 
+function Designer:opts_alias_dp_p(opts)
+	opts = self:opts_pt(opts, 'dp', 'dx', 'dy', nil, false)
+	if opts ~= nil and opts.dp ~= nil then
+		opts.p = opts.dp
+	end
+	return opts
+end
+
 function Designer:advance_curs(opts)
 	local schem = self:top()
+	opts = self:opts_alias_dp_p(opts)
 	opts = self:opts_pt_short(opts, self:get_curs_info().adv)
 	if opts.n ~= nil then
 		opts.p.x = opts.p.x * opts.n
@@ -352,6 +363,7 @@ function Designer:advance_curs(opts)
 end
 
 function Designer:set_curs_adv(opts)
+	opts = self:opts_alias_dp_p(opts)
 	opts = self:opts_pt_short(opts)
 	self:get_curs_info().adv = opts.p
 end
@@ -520,12 +532,6 @@ function Designer:opts_part(opts)
 		elem.DEFAULT_PT_DTEC,
 	}
 
-	local do_from_to_pos = Util.arr_contains(from_to_pos_enabled, t)
-	if do_from_to_pos then
-		opts = self:opts_pt(opts, 'from', 'fromx', 'fromy', opts.p)
-		opts = self:opts_pt(opts, 'to', 'tox', 'toy', opts.from, false)
-	end
-
 	local function expand_aport(target_type, aport_name, s_name, e_name)
 		if not custom_elem_match(t, target_type) then return end
 		opts = self:opts_aport(opts, aport_name, s_name, e_name, opts.from)
@@ -533,6 +539,12 @@ function Designer:opts_part(opts)
 	expand_aport('cray', 'to', 's', 'e')
 	expand_aport('dray', 'to', 'tos', 'toe')
 	expand_aport('ldtc', 'to', 's', 'e')
+
+	local do_from_to_pos = Util.arr_contains(from_to_pos_enabled, t)
+	if do_from_to_pos then
+		opts = self:opts_pt(opts, 'from', 'fromx', 'fromy', opts.p)
+		opts = self:opts_pt(opts, 'to', 'tox', 'toy', opts.from, false)
+	end
 
 	local function calc_r(target_type, s_name, e_name)
 		if opts[s_name] == nil or opts[e_name] == nil then return end

@@ -115,4 +115,6 @@ Util.CONDUCTORS = {
 	elem.DEFAULT_PT_INST,
 }
 
+Util.FRME_RANGE = 15
+
 return Util
