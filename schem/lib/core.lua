@@ -29,10 +29,23 @@ function stacked_dray(opts)
 	end
 end
 
-function exponential_dray(opts)
-	opts = opts_bool(opts, 'done', true)
+ExponentialDraySpec = {}
+function ExponentialDraySpec.new(r, j)
+	return {r=r, j=j}
+end
+
+-- Args:
+-- - blocksz: Seed length. (default: 1)
+-- - Choose one:
+--   - to (aport) or s/e (start/end): Total effect range.
+--   - r: Length of total effect range. (default: 8)
+--   - nblocks: Total number of copies of seed to make.
+-- Returns:
+-- - List of ExponentialDraySpec containing r and j for each DRAY.
+function get_exponential_dray_configs(opts)
+	opts = opts_bool(opts, 'skip_curs_check', false)
 	opts = opts_aport(opts, 'to', 's', 'e')
-	if opts.s ~= nil then
+	if not opts.skip_curs_check and opts.s ~= nil then
 		assert(
 			odist(getcurs(), opts.s) == 1,
 			'effect range must start next to DRAY'
@@ -42,16 +55,33 @@ function exponential_dray(opts)
 	if opts.blocksz == nil then opts.blocksz = 1 end
 	if opts.nblocks ~= nil then opts.r = opts.nblocks * opts.blocksz end
 	if opts.r == nil then opts.r = 8 end
+
+	local configs = {}
 	local copied_sz = opts.blocksz
 	while copied_sz < opts.r do
 		local remainder = opts.r - copied_sz
 		if remainder <= copied_sz then
-			dray{r=remainder, j=copied_sz - remainder, done=opts.done}
-			return
+			table.insert(configs, ExponentialDraySpec.new(
+				remainder, copied_sz - remainder
+			))
+			break
 		end
-		dray{r=copied_sz, done=0}
+		table.insert(configs, ExponentialDraySpec.new(
+			copied_sz, 0
+		))
 		copied_sz = copied_sz * 2
 	end
+	return configs
+end
+
+function exponential_dray(opts)
+	opts = opts_bool(opts, 'done', true)
+
+	local configs = get_exponential_dray_configs(opts)
+	for i, spec in ipairs(configs) do
+		dray{r=spec.r, j=spec.j, done=0}
+	end
+	if opts.done then adv{} end
 end
 
 function aray_array_e(opts)
