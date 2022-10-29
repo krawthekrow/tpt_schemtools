@@ -246,6 +246,18 @@ function Designer:parse_full_var_name(full_name)
 	return ctx, name
 end
 
+function Designer:get_stack_at(p)
+	local schem = self:top()
+	if schem.parts[p.y] == nil then return nil end
+	return schem.parts[p.y][p.x]
+end
+
+function Designer:get_top_part_at(p)
+	local stack = self:get_stack_at(p)
+	if stack == nil then return nil end
+	return stack[#stack]
+end
+
 function Designer:connect_1way(v_from, p_to, args)
 	local port = self:get_var_raw(v_from)
 	local ctx, _ = self:parse_full_var_name(v_from)
@@ -288,6 +300,10 @@ function Designer:port(opts)
 	self:set_var(opts.v, Port:new(opts.p, opts.f))
 end
 
+-- Create a port with the same value of an existing port.
+-- Args:
+-- - from: The old port's name.
+-- - to: The new port's name. (default: the last component of `from`)
 function Designer:port_alias(opts)
 	local schem = self:top()
 	local ctx, name = self:parse_full_var_name(opts.from)
@@ -688,6 +704,7 @@ function Designer:pconfig(opts)
 	for k, v in pairs(opts.part) do
 		opts[k] = v
 	end
+	opts.from = Point:new(opts.part.x, opts.part.y)
 	opts = self:opts_part(opts)
 	config_part(opts.part, opts)
 end
@@ -806,6 +823,15 @@ function Designer:solve_constraints(opts)
 	}
 	constraints = {}
 	for k, v in pairs(opts) do
+		if k == 'x' then
+			k = 'ns'
+			v = Point:new(v, 0)
+		end
+		if k == 'y' then
+			k = 'ew'
+			v = Point:new(0, v)
+		end
+
 		local inclusive_suffix = 'i'
 		local is_inclusive = k:sub(-#inclusive_suffix) == inclusive_suffix
 		if is_inclusive then k = k:sub(1, -#inclusive_suffix - 1) end

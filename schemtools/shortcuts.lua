@@ -1,5 +1,6 @@
 local Util = require('schemtools/util')
 local Geom = require('schemtools/geom')
+local Point = Geom.Point
 
 local Shortcuts = {
 	globals = {},
@@ -16,6 +17,18 @@ function Shortcuts.set_global(k, v)
 	)
 	Shortcuts.globals[k] = true
 	_G[k] = v
+end
+
+local function intdiv(x, y)
+	return (x - (x % y)) / y
+end
+
+local function ceildiv(x, y)
+	if x % y == 0 then
+		return x / y
+	else
+		return intdiv(x, y) + 1
+	end
 end
 
 function Shortcuts.init(designer)
@@ -55,6 +68,7 @@ function Shortcuts.init(designer)
 		'plot',
 		'get_dtec_dist',
 		'pconfig',
+		'soft_assert',
 	}
 	for _, method in ipairs(designer_methods_to_expose) do
 		expose_designer_method(method)
@@ -75,13 +89,23 @@ function Shortcuts.init(designer)
 	expose_designer_method('aport', 'array_port')
 	expose_designer_method('odist', 'get_orth_dist')
 	expose_designer_method('odir', 'get_orth_dir')
+	expose_designer_method('pmap', 'get_top_part_at')
 
 	local function array(opts)
 		opts = designer:opts_pos(opts)
+		opts = designer:opts_pt(opts, 'dp', 'dx', 'dy', nil, false)
 		if opts.from ~= nil then opts.p = opts.from end
 		if opts.to ~= nil then
+			if opts.dp == nil then
+				opts.dp = designer:get_orth_dir(opts.p, opts.to)
+			end
 			opts.n = designer:get_orth_dist(opts.p, opts.to) + 1
-			opts.dp = designer:get_orth_dir(opts.p, opts.to)
+
+			-- allow striding
+			local dplen = designer:get_orth_dist(Point:zero(), opts.dp)
+			if dplen ~= 0 then
+				opts.n = intdiv(opts.n, dplen)
+			end
 		end
 		local func = opts.f
 		opts.f = function()
@@ -105,9 +129,6 @@ function Shortcuts.init(designer)
 	end
 	Shortcuts.set_global('tc', test_case)
 
-	local function intdiv(x, y)
-		return (x - (x % y)) / y
-	end
 	local function ilog2(x)
 		local i = 0
 		while true do
@@ -119,6 +140,7 @@ function Shortcuts.init(designer)
 		return bit.band(x, bit.bnot(y))
 	end
 	Shortcuts.set_global('intdiv', intdiv)
+	Shortcuts.set_global('ceildiv', ceildiv)
 	Shortcuts.set_global('ilog2', ilog2)
 	Shortcuts.set_global('shl', bit.lshift)
 	Shortcuts.set_global('shr', bit.rshift)
@@ -130,11 +152,12 @@ function Shortcuts.init(designer)
 	Shortcuts.set_global('ka', 0x20000000)
 
 	local function make_point(x, y)
-		return Geom.Point:new(x, y)
+		return Point:new(x, y)
 	end
 	Shortcuts.set_global('p', make_point)
 
 	Shortcuts.set_global('Util', Util)
+	Shortcuts.set_global('Point', Point)
 end
 
 function Shortcuts.teardown_globals()
