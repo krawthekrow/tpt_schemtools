@@ -10,6 +10,7 @@ function stacked_dray(opts)
 	opts = opts_bool(opts, 'done', true)
 	opts = opts_aport(opts, 'to', 's', 'e')
 	if opts.off == nil then opts.off = 0 end
+	if opts.r == nil then opts.r = 1 end
 	local cover_range = odist(opts.s, opts.e) + 1
 	local d = odir(opts.s, opts.e)
 	local num_covered = 0
