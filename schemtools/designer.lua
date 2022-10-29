@@ -761,15 +761,17 @@ function Designer:place_schem(child_schem, opts)
 	local schem = self:top()
 	self:push_curs(Point:new(0, 0))
 
+	-- Amount to shift schematic by, if necessary.
+	local shift_p = Point:new(0, 0)
 	if opts.ref ~= nil then
-		opts.p = opts.p:sub(child_schem.vars[opts.ref].p)
+		shift_p = opts.p:sub(child_schem.vars[opts.ref].p)
 	end
 
 	child_schem:for_each_stack(function(p, stack)
 		-- Do not clone particles so that var references are
 		-- maintained when a schematic is placed.
 		-- Note that this makes schematics single-use only.
-		schem:place_parts(p:add(opts.p), stack, opts.under)
+		schem:place_parts(p:add(shift_p), stack, opts.under)
 	end)
 
 	self:pop_curs()
@@ -777,10 +779,10 @@ function Designer:place_schem(child_schem, opts)
 		self:run_with_ctx(opts.v, function()
 			for name, val in pairs(child_schem.vars) do
 				if getmetatable(val) == Port then
-					val.p = opts.p:add(val.p)
+					val.p = val.p:add(shift_p)
 				end
 				if getmetatable(val) == ArrayPort then
-					val:translate(opts.p)
+					val:translate(shift_p)
 				end
 				name = self:expand_var_name(name)
 				schem.vars[name] = val
@@ -794,7 +796,9 @@ function Designer:place_schem(child_schem, opts)
 end
 
 function Designer:instantiate_schem(func, opts)
+	opts = self:opts_pos(opts)
 	local function call_func_with_args()
+		self:set_curs({p = opts.p})
 		if opts.args == nil then
 			func(opts)
 		else
