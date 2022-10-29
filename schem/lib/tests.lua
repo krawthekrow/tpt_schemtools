@@ -99,7 +99,7 @@ function disp56_tb()
 	schem{
 		f=disp56,
 		v='disp',
-		x=100, y=100,
+		x=70, y=100,
 	}
 	plot{clear={w=sim.XRES/2}, run_test=0}
 end
