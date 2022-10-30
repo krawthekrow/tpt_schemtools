@@ -86,6 +86,8 @@ function SchemTools:register_trigger(opts)
 	end
 	opts.schemtools_path = sanitize_path(opts.schemtools_path)
 
+	local designer = nil
+	local graphics = nil
 	local function reload_tools()
 		if opts.use_shortcuts and self.Main ~= nil then
 			self.Main.Shortcuts.teardown_globals()
@@ -96,16 +98,18 @@ function SchemTools:register_trigger(opts)
 			opts.schemtools_path, SCHEMTOOLS_ENTRY
 		)
 	end
+	reload_tools()
 
-	local designer = nil
 	local function on_key(key, scan, is_repeat)
 		if is_repeat then return end
 		if key ~= opts.key then return end
 		if opts.reload_tools then
 			reload_tools()
 		end
+		designer = self.Main.Designer:new()
+		graphics = self.Main.Graphics:new()
+		graphics.designer = designer
 		if opts.use_shortcuts then
-			designer = self.Main.Designer:new()
 			self.Main.Shortcuts.init(designer)
 		end
 		if opts.reload then
@@ -129,6 +133,24 @@ function SchemTools:register_trigger(opts)
 	event.register(event.tick, wrap_with_xpcall(on_tick, function()
 		if designer ~= nil then
 			designer.tester:stop()
+		end
+	end))
+
+	-- Graphics
+
+	local graphics_event = event.tick
+	if event.prehuddraw ~= nil then
+		-- If prehuddraw (from subframe mod) is supported, use it to draw in the zoom window below the game's HUD.
+		graphics_event = event.prehuddraw
+	end
+	event.register(graphics_event, wrap_with_xpcall(function()
+		if graphics ~= nil then
+			graphics:on_prehud()
+		end
+	end))
+	event.register(event.mousemove, wrap_with_xpcall(function(x, y, dx, dy)
+		if graphics ~= nil then
+			graphics:on_mousemove(x, y, dx, dy)
 		end
 	end))
 end

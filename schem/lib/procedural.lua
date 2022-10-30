@@ -13,7 +13,16 @@ function shr_1(opts)
 			inwr{}
 
 			-- fill in the DTEC later
-			if i == core_num_rows then port{v='res_out'} end
+			if i == core_num_rows then
+				port{v='res_out'}
+			end
+			if i == 1 then
+				port{cmt=
+					'Each DTEC selects the lowest row where a BRAY is present, so that ' ..
+					'the final shift is the sum of all shifts in rows where the BRAY ' ..
+					'is not annihilated.'
+				}
+			end
 			port{v='dtec_loc'}; inwr{}
 			filt{mode='set'}
 

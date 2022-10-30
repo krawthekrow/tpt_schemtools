@@ -115,6 +115,10 @@ function aray_array_e(opts)
 	chain{dy=1, p=v('last_aray'):s():w(), f=function()
 		local respark_range = opts.n
 		if opts.n % 2 == 0 then respark_range = respark_range - 1 end
+		port{cmt=
+			'Exponential DRAY; resets the outer column of sparkers by repeatedly ' ..
+			'cloning the lowermost SPRK, which is a solid SPRK.'
+		}
 		exponential_dray{to=v('outer_sprkcol'), blocksz=2}
 		ssconv{t='pscn', done=0}
 		pscn{sprk=1}

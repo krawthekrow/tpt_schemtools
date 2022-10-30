@@ -16,6 +16,10 @@ function Point:zero()
 	return Point:new(0, 0)
 end
 
+function Point:lensq()
+	return self.x * self.x + self.y * self.y
+end
+
 function Point:add(op)
 	return Point:new(self.x + op.x, self.y + op.y)
 end

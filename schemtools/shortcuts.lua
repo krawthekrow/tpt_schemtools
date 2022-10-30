@@ -90,6 +90,7 @@ function Shortcuts.init(designer)
 	expose_designer_method('odist', 'get_orth_dist')
 	expose_designer_method('odir', 'get_orth_dir')
 	expose_designer_method('pmap', 'get_top_part_at')
+	expose_designer_method('cmt', 'add_comment')
 
 	local function array(opts)
 		opts = designer:opts_pos(opts)

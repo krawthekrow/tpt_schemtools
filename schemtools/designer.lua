@@ -13,10 +13,11 @@ function Cursor.new()
 end
 
 local Port = {}
-function Port:new(p, connect_func)
+function Port:new(p, connect_func, cmt)
 	local o = {
 		p = p,
 		connect_func = connect_func,
+		cmt = cmt,
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -133,12 +134,24 @@ function Schematic:for_each_part(func)
 	end)
 end
 
+-- translation functions when placing an offsetted schematic
+local DEFAULT_PORT_TRANSLATORS = {
+	[Port] = function(p, shift_p)
+		p.p = p.p:add(shift_p)
+	end,
+	[ArrayPort] = function(ap, shift_p)
+		ap:translate(shift_p)
+	end,
+}
+
 local Designer = {}
 function Designer:new()
 	local o = {
 		stack = {},
-		autogen_instance_name_cnt = 0,
+		autogen_name_cnt = 0,
+		port_translators = {unpack(DEFAULT_PORT_TRANSLATORS)},
 		tester = Tester:new(),
+		comments = {},
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -165,6 +178,12 @@ function Designer:top_ctx()
 	local schem = self:top()
 	if #schem.ctx_stack == 0 then return nil end
 	return schem.ctx_stack[#schem.ctx_stack]
+end
+
+function Designer:autogen_name(tag)
+	local name = '__autogen_' .. tag .. '_' .. self.autogen_name_cnt
+	self.autogen_name_cnt = self.autogen_name_cnt + 1
+	return name
 end
 
 function Designer:expand_var_name(name)
@@ -289,6 +308,8 @@ end
 
 function Designer:port(opts)
 	opts = self:opts_pos(opts)
+	if opts.v == nil and opts.cmt ~= nil then opts.v = self:autogen_name('cmt') end
+
 	local schem = self:top()
 	local existing_val = self:get_var_raw(opts.v)
 	if existing_val ~= nil then
@@ -297,7 +318,7 @@ function Designer:port(opts)
 			'variable "' .. opts.v .. '" already used for non-port'
 		)
 	end
-	self:set_var(opts.v, Port:new(opts.p, opts.f))
+	self:set_var(opts.v, Port:new(opts.p, opts.f, opts.cmt))
 end
 
 -- Create a port with the same value of an existing port.
@@ -623,7 +644,7 @@ function Designer:opts_part(opts)
 		end
 		self:soft_assert(false, 'filt mode "' .. s .. '" not recognized')
 		print('available filt modes:')
-		self:dump_var(filt_mode_names)
+		Util.dump_var(filt_mode_names)
 		return 0
 	end
 	local function prop_frme_sticky(x)
@@ -758,6 +779,8 @@ function Designer:place_schem(child_schem, opts)
 	opts = self:opts_bool(opts, 'done', true)
 	-- "under=1" places particles at the bottom of stacks
 	opts = self:opts_bool(opts, 'under', false)
+	opts = self:opts_bool(opts, 'keep_vars', opts.v ~= nil)
+	if opts.v == nil then opts.v = self:autogen_name('schem') end
 	local schem = self:top()
 	self:push_curs(Point:new(0, 0))
 
@@ -775,20 +798,22 @@ function Designer:place_schem(child_schem, opts)
 	end)
 
 	self:pop_curs()
-	if opts.v ~= nil then
-		self:run_with_ctx(opts.v, function()
-			for name, val in pairs(child_schem.vars) do
-				if getmetatable(val) == Port then
-					val.p = val.p:add(shift_p)
-				end
-				if getmetatable(val) == ArrayPort then
-					val:translate(shift_p)
+	self:run_with_ctx(opts.v, function()
+		for name, val in pairs(child_schem.vars) do
+			local keep_var = opts.keep_vars
+			if getmetatable(val) == Port and val.cmt ~= nil then
+				keep_var = true
+			end
+			if keep_var then
+				local translation_func = self.port_translators[getmetatable(val)]
+				if translation_func ~= nil then
+					translation_func(val)
 				end
 				name = self:expand_var_name(name)
 				schem.vars[name] = val
 			end
-		end)
-	end
+		end
+	end)
 
 	if opts.done then
 		self:advance_curs()
@@ -802,7 +827,7 @@ function Designer:instantiate_schem(func, opts)
 		if opts.args == nil then
 			func(opts)
 		else
-			func(table.unpack(opts.args))
+			func(unpack(opts.args))
 		end
 	end
 	local schem = self:make_schem(call_func_with_args)
@@ -854,6 +879,10 @@ function Designer:solve_constraints(opts)
 	return Constraints.solve_2ray(constraints[1], constraints[2])
 end
 
+function Designer:add_comment(opts)
+	opts = self:opts_pos(opts)
+end
+
 function Designer:dump_var(x)
 	return Util.dump_var(x, function(x)
 		if getmetatable(x) == Geom.Point then
@@ -903,8 +932,10 @@ end
 
 function Designer:plot_schem(opts)
 	opts = self:opts_pos(opts)
-	reload_particle_order()
+
 	local schem = self:top()
+
+	reload_particle_order()
 	schem:for_each_part(function(p, part)
 		p = p:add(opts.p)
 		if p.x < 0 or p.y < 0 then
@@ -924,6 +955,19 @@ function Designer:plot_schem(opts)
 		end
 	end)
 	reload_particle_order()
+
+	for _, var in pairs(schem.vars) do
+		if getmetatable(var) == Port and var.cmt ~= nil then
+			if self.comments[var.p.y] == nil then
+				self.comments[var.p.y] = {}
+			end
+			if self.comments[var.p.y][var.p.x] == nil then
+				self.comments[var.p.y][var.p.x] = var.cmt
+			else
+				self.comments[var.p.y][var.p.x] = self.comments[var.p.y][var.p.x] .. '\n\n' .. var.cmt
+			end
+		end
+	end
 end
 
 function Designer:clear(opts)
