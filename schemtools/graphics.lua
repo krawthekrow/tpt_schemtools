@@ -12,6 +12,8 @@ function Graphics:new()
 	local o = {
 		designer = nil,
 		mouse_pos = nil,
+		cmt_key = nil,
+		is_cmt_key_down = false,
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -51,11 +53,7 @@ function Graphics:on_mousemove(x, y, dx, dy)
 	self.mouse_pos = Point:new(x, y)
 end
 
-function Graphics:on_prehud()
-	if self.designer == nil then
-		return
-	end
-
+function Graphics:draw_cmt_hud()
 	local zsx, zsy, zssz = ren.zoomScope()
 	local zwx, zwy, zoom_factor, zwsz = ren.zoomWindow()
 	local zsp = Point:new(zsx, zsy)
@@ -207,6 +205,30 @@ function Graphics:on_prehud()
 			textp.x, textp.y, cmt,
 			0xEE, 0xEE, 0xEE
 		)
+	end
+end
+
+function Graphics:on_prehud()
+	if self.designer == nil then
+		return
+	end
+
+	if self.is_cmt_key_down then
+		self:draw_cmt_hud()
+	end
+end
+
+function Graphics:on_key_down(key, shift, ctrl, alt)
+	if key == self.cmt_key and not shift and not ctrl and not alt then
+		self.is_cmt_key_down = true
+		return false
+	end
+end
+
+function Graphics:on_key_up(key, shift, ctrl, alt)
+	if key == self.cmt_key and not shift and not ctrl and not alt then
+		self.is_cmt_key_down = false
+		return false
 	end
 end
 

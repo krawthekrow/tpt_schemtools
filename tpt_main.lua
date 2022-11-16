@@ -15,6 +15,8 @@
 local DEFAULT_SCHEMTOOLS_PATH = 'schemtools'
 local SCHEMTOOLS_PREFIX = 'schemtools/'
 local SCHEMTOOLS_ENTRY = 'schemtools/main'
+local DEFAULT_RELOAD_KEY = 13 -- Return/Enter
+local DEFAULT_CMT_KEY = 97 -- 'A' key
 
 local function str_startswith(str, prefix)
 	return str:sub(1, #prefix) == prefix
@@ -71,8 +73,8 @@ local function wrap_with_xpcall(func, after_err)
 end
 
 function SchemTools:register_trigger(opts)
-	-- default key is Return/Enter
-	if opts.key == nil then opts.key = 13 end
+	if opts.key == nil then opts.key = DEFAULT_RELOAD_KEY end
+	if opts.cmt_key == nil then opts.cmt_key = DEFAULT_CMT_KEY end
 	if opts.reload_tools == nil then opts.reload_tools = false end
 	if opts.reload == nil then
 		opts.reload = (opts.reload_entry ~= nil)
@@ -100,15 +102,14 @@ function SchemTools:register_trigger(opts)
 	end
 	reload_tools()
 
-	local function on_key(key, scan, is_repeat)
-		if is_repeat then return end
-		if key ~= opts.key then return end
+	local function trigger_reload()
 		if opts.reload_tools then
 			reload_tools()
 		end
 		designer = self.Main.Designer:new()
 		graphics = self.Main.Graphics:new()
 		graphics.designer = designer
+		graphics.cmt_key = opts.cmt_key
 		if opts.use_shortcuts then
 			self.Main.Shortcuts.init(designer)
 		end
@@ -123,7 +124,26 @@ function SchemTools:register_trigger(opts)
 			schematic_func(self.Main)
 		end
 	end
-	event.register(event.keypress, wrap_with_xpcall(on_key))
+
+	local function on_key_down(key, scan, is_repeat, shift, ctrl, alt)
+		if is_repeat then return end
+		if key == opts.key and not shift and not ctrl and not alt then
+			trigger_reload()
+			return false
+		end
+		if graphics ~= nil then
+			return graphics:on_key_down(key, shift, ctrl, alt)
+		end
+	end
+	event.register(event.keypress, wrap_with_xpcall(on_key_down))
+
+	local function on_key_up(key, scan, is_repeat, shift, ctrl, alt)
+		if is_repeat then return end
+		if graphics ~= nil then
+			return graphics:on_key_up(key, shift, ctrl, alt)
+		end
+	end
+	event.register(event.keyrelease, wrap_with_xpcall(on_key_up))
 
 	local function on_tick()
 		if designer ~= nil then
@@ -140,7 +160,8 @@ function SchemTools:register_trigger(opts)
 
 	local graphics_event = event.tick
 	if event.prehuddraw ~= nil then
-		-- If prehuddraw (from subframe mod) is supported, use it to draw in the zoom window below the game's HUD.
+		-- If prehuddraw (from subframe mod) is supported, use it
+		-- to draw in the zoom window below the game's HUD.
 		graphics_event = event.prehuddraw
 	end
 	event.register(graphics_event, wrap_with_xpcall(function()
