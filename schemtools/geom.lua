@@ -60,6 +60,26 @@ function Point:s(n)
 	return self:add(Point:new(0, n))
 end
 
+function Point:nw(n)
+	if n == nil then n = 1 end
+	return self:add(Point:new(-n, -n))
+end
+
+function Point:ne(n)
+	if n == nil then n = 1 end
+	return self:add(Point:new(n, -n))
+end
+
+function Point:sw(n)
+	if n == nil then n = 1 end
+	return self:add(Point:new(-n, n))
+end
+
+function Point:se(n)
+	if n == nil then n = 1 end
+	return self:add(Point:new(n, n))
+end
+
 Geom.Constraints = {}
 
 Geom.Constraints.Ray = {}
