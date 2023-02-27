@@ -87,7 +87,7 @@ local DEFAULT_PORT_TRANSLATORS = {
 		p.p = p.p:add(shift_p)
 	end,
 	[ArrayPort] = function(ap, shift_p)
-		ap:translate(shift_p)
+		ap:add_in_place(shift_p)
 	end,
 }
 

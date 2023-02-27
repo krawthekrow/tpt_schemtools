@@ -104,7 +104,7 @@ function ArrayPort:expand(p)
 	self.maxy = math.max(self.maxy, p.y)
 end
 
-function ArrayPort:translate(p)
+function ArrayPort:add_in_place(p)
 	self.minx = self.minx + p.x
 	self.maxx = self.maxx + p.x
 	self.miny = self.miny + p.y
