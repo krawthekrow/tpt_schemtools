@@ -144,12 +144,20 @@ local DEFAULT_PORT_TRANSLATORS = {
 	end,
 }
 
+local function clone_default_port_translators()
+	local translators = {}
+	for typ, translator in pairs(DEFAULT_PORT_TRANSLATORS) do
+		translators[typ] = translator
+	end
+	return translators
+end
+
 local Designer = {}
 function Designer:new()
 	local o = {
 		stack = {},
 		autogen_name_cnt = 0,
-		port_translators = {unpack(DEFAULT_PORT_TRANSLATORS)},
+		port_translators = clone_default_port_translators(),
 		tester = Tester:new(),
 		comments = {},
 	}
@@ -807,7 +815,7 @@ function Designer:place_schem(child_schem, opts)
 			if keep_var then
 				local translation_func = self.port_translators[getmetatable(val)]
 				if translation_func ~= nil then
-					translation_func(val)
+					translation_func(val, shift_p)
 				end
 				name = self:expand_var_name(name)
 				schem.vars[name] = val
