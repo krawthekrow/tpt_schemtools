@@ -91,7 +91,7 @@ function vram56_tb()
 		x=100, y=100,
 		init_data=init_data,
 	}
-	connect{v='vram.make_writer', p=v('vram.data_block'):sw():s(10)}
+	connect{v='vram.make_writer', p=v('vram.data_block'):sw(0):s(10)}
 	plot{clear={}, run_test=0}
 end
 

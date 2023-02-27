@@ -44,7 +44,7 @@ function pstn_demux_e(opts)
 
 	local cum_piston_r = -1
 	-- piston, binary section
-	chain{dx=-1, p=v('pscnrow'):e():s(), f=function()
+	chain{dx=-1, p=v('pscnrow'):le(0):s(), f=function()
 		-- each PSTN's pushing power includes all the PSTNs in front of it,
 		-- so subtract the accumulated pushing power from the target
 		-- pushing power
@@ -59,7 +59,7 @@ function pstn_demux_e(opts)
 	end}
 
 	-- piston front
-	chain{dx=1, p=v('pstn_bin'):e():e(), f=function()
+	chain{dx=1, p=v('pstn_bin'):le(1), f=function()
 		if not opts.omit_front_pstn then
 			pstn{r=0}
 		end
@@ -67,7 +67,7 @@ function pstn_demux_e(opts)
 	end}
 
 	-- piston back
-	chain{dx=-1, p=v('pstn_bin'):w():w(), f=function()
+	chain{dx=-1, p=v('pstn_bin'):lw(1), f=function()
 		port{v='pstn_target'}
 		adv{}
 		if not opts.omit_back_dmnd then
@@ -93,7 +93,7 @@ function pstn_demux_e(opts)
 		end}
 	end
 
-	port{v='pscn_placer_wbnd', p=v('pscnrow'):e():e(2)}
+	port{v='pscn_placer_wbnd', p=v('pscnrow'):le(2)}
 	if opts.detach_pscn_placer then
 		port{v='make_pscn_placer', f=function(opts)
 			make_pscn_placer(findpt{ns=opts.p, ei=v('pscn_placer_wbnd')}, true)
@@ -103,22 +103,28 @@ function pstn_demux_e(opts)
 	end
 
 	-- addr_in feed into addr row
-	port{v='ldtc_target', p=findpt{n=v('pstn_target'), w=v('addrrow'):w()}}
+	port{v='ldtc_target', p=findpt{n=v('pstn_target'), w=v('addrrow'):lw(0)}}
 	array{
-		from=v('ldtc_target'):e(), to=v('addrrow'):w():w(),
+		from=v('ldtc_target'):e(), to=v('addrrow'):lw(1),
 		f=function() filt{} end
 	}
 
 	-- setter mechanism for APOM
-	port{v='cray_target', p=findpt{n=v('pstn_target'), w=v('pscnrow'):w()}}
-	port{v='apom_setter_s', p=findpt{n=v('cray_target'), w=v('arayrow'):w()}}
+	port{
+		v='cray_target',
+		p=findpt{n=v('pstn_target'), w=v('pscnrow'):lw(0)},
+	}
+	port{
+		v='apom_setter_s',
+		p=findpt{n=v('cray_target'), w=v('arayrow'):lw(0)},
+	}
 	chain{dy=-1, p=v('apom_setter_s'), f=function()
 		aport{v='apom_insl'}
 		insl{} -- holds the LDTC's ID
 		aport{v='apom_insl'}
 		insl{} -- holds the CRAY's ID
 		pstn{r=max_extension - cum_piston_r, v='resetter_pstn'}
-		cray{r=num_segs, from=v('cray_target'), to=v('pscnrow'):w()}
+		cray{r=num_segs, from=v('cray_target'), to=v('pscnrow'):lw(0)}
 
 		cray{v='apom_pstn_id_grabber', done=0}
 		cray{to=v('apom_insl'), done=0}
@@ -242,19 +248,19 @@ function from1d_32(opts)
 		filt{ct=opts.init_data[i]}
 	end}
 
-	port{v='io_min_y', p=v('data_block'):w():s(2)}
+	port{v='io_min_y', p=v('data_block'):lw(0):s(2)}
 	port{v='make_reader', f=function(opts)
 		if opts.name == nil then opts.name = 'reader' end
 		schem{
 			f=fram1d_reader,
 			v=opts.name,
-			p=findpt{s=v('data_block'):w():s(), ew=opts.p},
+			p=findpt{s=v('data_block'):lw(0):s(), ew=opts.p},
 			ref='pstn_head',
 		}
-		port{v=opts.name .. '_pscn_placer', p=v('data_block'):e():e()}
+		port{v=opts.name .. '_pscn_placer', p=v('data_block'):le(1)}
 		connect{
 			v=opts.name .. '.make_pscn_placer',
-			p=v('data_block'):e():e()
+			p=v('data_block'):le(1),
 		}
 		port_alias{from=opts.name .. '.addr_in', to='raddr_in'}
 		port_alias{from=opts.name .. '.data_out', to='rdata_out'}

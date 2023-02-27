@@ -1,4 +1,5 @@
 local Geom = require('schemtools/geom')
+local ArrayPort = require('schemtools/arrayport')
 local Util = require('schemtools/util')
 local Tester = require('schemtools/tester')
 local Point = Geom.Point
@@ -22,60 +23,6 @@ function Port:new(p, connect_func, cmt)
 	setmetatable(o, self)
 	self.__index = self
 	return o
-end
-
-local ArrayPort = {}
-function ArrayPort:new(p)
-	local o = {
-		minx = p.x,
-		maxx = p.x,
-		miny = p.y,
-		maxy = p.y,
-	}
-	setmetatable(o, self)
-	self.__index = self
-	return o
-end
-
-function ArrayPort:clone(old)
-	local o = {}
-	for k, v in pairs(old) do o[k] = v end
-	setmetatable(o, self)
-	self.__index = self
-	return o
-end
-
-function ArrayPort:is_horz() return self.miny == self.maxy end
-function ArrayPort:is_vert() return self.minx == self.maxx end
-function ArrayPort:check_horz()
-	assert(self:is_horz(), 'array port is not a horizontal line')
-end
-function ArrayPort:check_vert()
-	assert(self:is_vert(), 'array port is not a vertical line')
-end
-function ArrayPort:nw() return Point:new(self.minx, self.miny) end
-function ArrayPort:ne() return Point:new(self.maxx, self.miny) end
-function ArrayPort:sw() return Point:new(self.minx, self.maxy) end
-function ArrayPort:se() return Point:new(self.maxx, self.maxy) end
-function ArrayPort:n() self:check_vert(); return self:nw() end
-function ArrayPort:s() self:check_vert(); return self:sw() end
-function ArrayPort:w() self:check_horz(); return self:nw() end
-function ArrayPort:e() self:check_horz(); return self:ne() end
-function ArrayPort:x() self:check_vert(); return self.minx end
-function ArrayPort:y() self:check_horz(); return self.miny end
-
-function ArrayPort:expand(p)
-	self.minx = math.min(self.minx, p.x)
-	self.maxx = math.max(self.maxx, p.x)
-	self.miny = math.min(self.miny, p.y)
-	self.maxy = math.max(self.maxy, p.y)
-end
-
-function ArrayPort:translate(p)
-	self.minx = self.minx + p.x
-	self.maxx = self.maxx + p.x
-	self.miny = self.miny + p.y
-	self.maxy = self.maxy + p.y
 end
 
 local Schematic = {}
@@ -549,8 +496,8 @@ function Designer:opts_aport(opts, aport_name, s_name, e_name, ref)
 		'array port not linear'
 	)
 	local pt1, pt2 = nil, nil
-	if is_horz then pt1, pt2 = aport:w(), aport:e() end
-	if is_vert then pt1, pt2 = aport:n(), aport:s() end
+	if is_horz then pt1, pt2 = aport:w(0), aport:e(0) end
+	if is_vert then pt1, pt2 = aport:n(0), aport:s(0) end
 	local dist1 = self:get_orth_dist(ref, pt1)
 	local dist2 = self:get_orth_dist(ref, pt2)
 	if dist1 < dist2 then

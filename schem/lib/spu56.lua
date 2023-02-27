@@ -39,7 +39,7 @@ local function spu56_rmask_demux(opts)
 
 	local cum_piston_r = -1
 	-- piston, binary section
-	chain{dx=1, p=v('pscnrow'):w():s(), f=function()
+	chain{dx=1, p=v('pscnrow'):lw(0):s(), f=function()
 		-- each PSTN's pushing power includes all the PSTNs in front of it,
 		-- so subtract the accumulated pushing power from the target
 		-- pushing power
@@ -70,13 +70,13 @@ local function spu56_rmask_demux(opts)
 		end}
 	end
 
-	port{v='pscn_placer_wbnd', p=v('pscnrow'):e():e(2)}
+	port{v='pscn_placer_wbnd', p=v('pscnrow'):le(2)}
 	port{v='make_pscn_placer', f=function(opts)
 		make_pscn_placer(findpt{ns=opts.p, ei=v('pscn_placer_wbnd')})
 	end}
 
 	-- set up APOM'ed CRAY sparker
-	chain{dx=-1, p=v('pscnrow'):w():w(), f=function()
+	chain{dx=-1, p=v('pscnrow'):lw(1), f=function()
 		port{v='cray_target'}
 		adv{}
 		ssconv{t='pscn', done=0}
@@ -85,14 +85,17 @@ local function spu56_rmask_demux(opts)
 	end}
 
 	-- set up addr_in feed
-	port{v='ldtc_target', p=findpt{n=v('cray_target'), w=v('addrrow'):w()}}
+	port{v='ldtc_target', p=findpt{n=v('cray_target'), w=v('addrrow'):lw(0)}}
 	array{
-		from=v('addrrow'):w():w(), to=v('ldtc_target'):e(),
+		from=v('addrrow'):lw(1), to=v('ldtc_target'):e(),
 		f=function() filt{} end,
 	}
 
 	-- setter mechanism for APOM
-	port{v='apom_setter_s', p=findpt{w=v('arayrow'):w(), n=v('ldtc_target')}}
+	port{
+		v='apom_setter_s',
+		p=findpt{w=v('arayrow'):lw(0), n=v('ldtc_target')}
+	}
 	chain{dy=-1, p=v('apom_setter_s'), f=function()
 		aport{v='apom_insl'}
 		insl{} -- holds the LDTC's ID
@@ -110,7 +113,7 @@ local function spu56_rmask_demux(opts)
 	-- resetter mechanism
 	port{
 		v='apom_resetter_n',
-		p=findpt{s=v('cray_target'), ew=v('pstn_bin'):w():s()}
+		p=findpt{s=v('cray_target'), ew=v('pstn_bin'):lw(0):s()}
 	}
 	chain{dy=1, p=v('apom_resetter_n'), f=function()
 		-- leave space to DRAY over the CRAY
@@ -122,7 +125,7 @@ local function spu56_rmask_demux(opts)
 		pscn{sprk=1}
 	end}
 
-	port{v='pstn_head', p=v('pstn_bin'):w():w()}
+	port{v='pstn_head', p=v('pstn_bin'):lw(1)}
 end
 
 local function spu56_hshift_demux(opts)
@@ -154,8 +157,8 @@ local function spu56_hshift_demux(opts)
 		end}
 	end}
 
-	port{v='pstn_head', p=v('pstnrow'):w():w()}
-	port{v='pstn_tail', p=v('pstnrow'):e():e()}
+	port{v='pstn_head', p=v('pstnrow'):lw(1)}
+	port{v='pstn_tail', p=v('pstnrow'):le(1)}
 
 	-- The PSTN placer has three steps:
 	-- Clearing step: PSTNs from the previous frame are cleared.
@@ -164,7 +167,7 @@ local function spu56_hshift_demux(opts)
 	-- Filling step: binary-r PSTNs are placed in the now empty spaces
 	-- (previously BRAYs).
 	port{v='make_pstn_placer', f=function(opts)
-		port{v='pstn_placer_e', p=findpt{ns=opts.p, w=v('pstnrow'):w()}}
+		port{v='pstn_placer_e', p=findpt{ns=opts.p, w=v('pstnrow'):lw(0)}}
 
 		chain{dx=-1, p=v('pstn_placer_e'), f=function()
 			-- the PSTNs are placed in reverse
@@ -193,7 +196,7 @@ local function spu56_hshift_demux(opts)
 			port{v='cray_target'}
 			port{
 				v='resetter_apom_s',
-				p=findpt{n=v('cray_target'), w=v('arayrow'):w()}
+				p=findpt{n=v('cray_target'), w=v('arayrow'):lw(0)}
 			}
 			chain{dy=-1, p=v('resetter_apom_s'), done=0, f=function()
 				port{v='apom_cray_id_holder'}
@@ -326,8 +329,8 @@ local function spu56_rmask_hshift_demux(opts)
 	}
 	-- TODO: temporarily share addr_in for rmask and hshift
 	array{
-		from=v('rmask_demux.addrrow'):e():e(),
-		to=v('hshift_demux.addrrow'):w():w(),
+		from=v('rmask_demux.addrrow'):le(1),
+		to=v('hshift_demux.addrrow'):lw(1),
 		f=function() filt{} end,
 	}
 
@@ -415,7 +418,7 @@ local function spu56_rmask_hshift_demux(opts)
 	-- leave it to parent to make pscn placer, in order to combine
 	-- with the pscn placer for the lmask demux
 	port_alias{from='rmask_demux.pscnrow', to='rmask_pscnrow'}
-	port{v='pscn_placer_wbnd', p=v('hshift_demux.androw'):e():e()}
+	port{v='pscn_placer_wbnd', p=v('hshift_demux.androw'):le(1)}
 
 	-- TODO: reset opt_pstn
 
@@ -496,7 +499,7 @@ function spu56()
 	-- only pull back the CRMC
 	pconfig{part=v('lmask_demux.resetter_pstn'), cap=1}
 	-- only retract the piston after the ARAYs have been fired
-	connect{v='lmask_demux.make_apom_resetter', p=v('arayrow'):w():s()}
+	connect{v='lmask_demux.make_apom_resetter', p=v('arayrow'):lw(0):s()}
 	-- compensate for offset space
 	pconfig{
 		part=v('lmask_demux.pstn_bin_1'),
@@ -515,10 +518,10 @@ function spu56()
 	}
 	connect{
 		v='rmask_hshift_demux.make_apom_resetter',
-		p=v('arayrow'):w(),
+		p=v('arayrow'):lw(0),
 	}
 	-- block the lmask PSTN from here instead
-	dmnd{p=v('rmask_hshift_demux.filler_template'):w():w()}
+	dmnd{p=v('rmask_hshift_demux.filler_template'):lw(1)}
 
 	-- combined PSCN placer for both lmask and rmask demuxes
 	chain{dx=1, p=v('rmask_hshift_demux.pscn_placer_wbnd'), f=function()
