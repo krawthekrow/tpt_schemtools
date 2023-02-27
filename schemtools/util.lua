@@ -1,5 +1,17 @@
 local Util = {}
 
+function Util.floordiv(x, y)
+	return (x - (x % y)) / y
+end
+
+function Util.ceildiv(x, y)
+	if x % y == 0 then
+		return x / y
+	else
+		return Util.floordiv(x, y) + 1
+	end
+end
+
 function Util.invert_table(tbl)
 	local invtbl = {}
 	for k, v in pairs(tbl) do

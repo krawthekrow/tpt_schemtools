@@ -19,18 +19,6 @@ function Shortcuts.set_global(k, v)
 	_G[k] = v
 end
 
-local function intdiv(x, y)
-	return (x - (x % y)) / y
-end
-
-local function ceildiv(x, y)
-	if x % y == 0 then
-		return x / y
-	else
-		return intdiv(x, y) + 1
-	end
-end
-
 function Shortcuts.init(designer)
 	Shortcuts.set_global('designer', designer)
 
@@ -105,7 +93,7 @@ function Shortcuts.init(designer)
 			-- allow striding
 			local dplen = designer:get_orth_dist(Point:zero(), opts.dp)
 			if dplen ~= 0 then
-				opts.n = intdiv(opts.n, dplen)
+				opts.n = Util.floordiv(opts.n, dplen)
 			end
 		end
 		local func = opts.f
@@ -140,8 +128,9 @@ function Shortcuts.init(designer)
 	local function bsub(x, y)
 		return bit.band(x, bit.bnot(y))
 	end
-	Shortcuts.set_global('intdiv', intdiv)
-	Shortcuts.set_global('ceildiv', ceildiv)
+	Shortcuts.set_global('intdiv', Util.floordiv)
+	Shortcuts.set_global('floordiv', Util.floordiv)
+	Shortcuts.set_global('ceildiv', Util.ceildiv)
 	Shortcuts.set_global('ilog2', ilog2)
 	Shortcuts.set_global('shl', bit.lshift)
 	Shortcuts.set_global('shr', bit.rshift)
