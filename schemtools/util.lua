@@ -55,7 +55,8 @@ function Util.dump_var(x, custom_dump)
 		local xstr = tostring(x) .. ' {'
 		for k, v in pairs(x) do
 			xstr = xstr .. '\n' ..
-				indent .. '  [' .. k .. '] => ' .. dump_var_inner(v, indent .. '  ')
+				indent .. '  [' .. dump_var_inner(k, indent .. '  ') .. '] => ' ..
+				dump_var_inner(v, indent .. '  ')
 		end
 		xstr = xstr .. '\n' ..
 			indent .. '}'
