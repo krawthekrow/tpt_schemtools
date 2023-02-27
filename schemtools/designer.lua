@@ -1,6 +1,8 @@
-local Geom = require('schemtools/geom')
-local ArrayPort = require('schemtools/arrayport')
 local Util = require('schemtools/util')
+local Geom = require('schemtools/geom')
+local Port = require('schemtools/port')
+local ArrayPort = require('schemtools/arrayport')
+local VariableStore = require('schemtools/varstore')
 local Tester = require('schemtools/tester')
 local Point = Geom.Point
 local Constraints = Geom.Constraints
@@ -13,27 +15,14 @@ function Cursor.new()
 	}
 end
 
-local Port = {}
-function Port:new(p, connect_func, cmt)
-	local o = {
-		p = p,
-		connect_func = connect_func,
-		cmt = cmt,
-	}
-	setmetatable(o, self)
-	self.__index = self
-	return o
-end
-
 local Schematic = {}
 function Schematic:new()
 	local o = {
 		curs_stack = { Cursor.new() },
-		ctx_stack = { },
 		-- parts[y][x] is a list of particles at (x, y) in stack order
 		-- in schematics, particles can take negative coordinates
 		parts = {},
-		vars = {},
+		varstore = VariableStore:new(),
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -129,22 +118,10 @@ function Designer:soft_assert(pred, msg)
 	end
 end
 
-function Designer:top_ctx()
-	local schem = self:top()
-	if #schem.ctx_stack == 0 then return nil end
-	return schem.ctx_stack[#schem.ctx_stack]
-end
-
 function Designer:autogen_name(tag)
 	local name = '__autogen_' .. tag .. '_' .. self.autogen_name_cnt
 	self.autogen_name_cnt = self.autogen_name_cnt + 1
 	return name
-end
-
-function Designer:expand_var_name(name)
-	local ctx = self:top_ctx()
-	if ctx == nil then return name end
-	return ctx .. '.' .. name
 end
 
 function Designer:is_var_name_valid(name)
@@ -152,28 +129,21 @@ function Designer:is_var_name_valid(name)
 end
 
 function Designer:set_var(name, val)
-	local is_valid_new_name = self:is_var_name_valid(name)
 	local schem = self:top()
 	if schem[name] ~= nil then
 		schem[name] = val
 		return
 	end
-	name = self:expand_var_name(name)
+
+	local is_valid_new_name = self:is_var_name_valid(name)
 	assert(is_valid_new_name, 'invalid new var name "' ..  name .. '"')
-	if
-		getmetatable(schem.vars[name]) == Port and
-		getmetatable(val) == Geom.Point
-	then
-		schem.vars[name].p = val
-		return
-	end
-	schem.vars[name] = val
+
+	schem.varstore:set_var(name, val)
 end
 
 function Designer:get_var_raw(name)
 	local schem = self:top()
-	name = self:expand_var_name(name)
-	return schem.vars[name]
+	return schem.varstore:get_var_raw(name)
 end
 
 function Designer:get_var(name)
@@ -181,24 +151,8 @@ function Designer:get_var(name)
 	if schem[name] ~= nil then
 		return schem[name]
 	end
-	local val = self:get_var_raw(name)
-	assert(
-		val ~= nil,
-		'variable "' .. name .. '" does not exist'
-	)
-	if getmetatable(val) == Port then
-		return val.p
-	end
-	return val
-end
 
-function Designer:begin_ctx(ctx)
-	ctx = self:expand_var_name(ctx)
-	table.insert(self:top().ctx_stack, ctx)
-end
-
-function Designer:end_ctx()
-	table.remove(self:top().ctx_stack)
+	return schem.varstore:get_var(name)
 end
 
 function Designer:run_with_ctx(ctx, func)
@@ -206,9 +160,11 @@ function Designer:run_with_ctx(ctx, func)
 		func()
 		return
 	end
-	self:begin_ctx(ctx)
+
+	local schem = self:top()
+	schem.varstore:begin_ctx(ctx)
 	func()
-	self:end_ctx()
+	schem.varstore:end_ctx()
 end
 
 function Designer:parse_full_var_name(full_name)
@@ -742,7 +698,7 @@ function Designer:place_schem(child_schem, opts)
 	-- Amount to shift schematic by, if necessary.
 	local shift_p = Point:new(0, 0)
 	if opts.ref ~= nil then
-		shift_p = opts.p:sub(child_schem.vars[opts.ref].p)
+		shift_p = opts.p:sub(child_schem.varstore:get_var(opts.ref))
 	end
 
 	child_schem:for_each_stack(function(p, stack)
@@ -754,20 +710,17 @@ function Designer:place_schem(child_schem, opts)
 
 	self:pop_curs()
 	self:run_with_ctx(opts.v, function()
-		for name, val in pairs(child_schem.vars) do
-			local keep_var = opts.keep_vars
+		child_schem.varstore:filter(function(name, val)
+			if opts.keep_vars then
+				return true
+			end
 			if getmetatable(val) == Port and val.cmt ~= nil then
-				keep_var = true
+				return true
 			end
-			if keep_var then
-				local translation_func = self.port_translators[getmetatable(val)]
-				if translation_func ~= nil then
-					translation_func(val, shift_p)
-				end
-				name = self:expand_var_name(name)
-				schem.vars[name] = val
-			end
-		end
+			return false
+		end)
+		child_schem.varstore:translate(shift_p, self.port_translators)
+		schem.varstore:merge(child_schem.varstore)
 	end)
 
 	if opts.done then
@@ -911,7 +864,7 @@ function Designer:plot_schem(opts)
 	end)
 	reload_particle_order()
 
-	for _, var in pairs(schem.vars) do
+	for _, var in pairs(schem.varstore.vars) do
 		if getmetatable(var) == Port and var.cmt ~= nil then
 			if self.comments[var.p.y] == nil then
 				self.comments[var.p.y] = {}
