@@ -64,6 +64,7 @@ function Shortcuts.init(designer)
 
 	expose_designer_method('dump', 'dump_var')
 	expose_designer_method('v', 'get_var')
+	expose_designer_method('iv', 'get_indexed_var')
 	expose_designer_method('setv', 'set_var')
 	expose_designer_method('adv', 'advance_curs')
 	expose_designer_method('cursmode', 'set_curs_adv')
@@ -99,14 +100,21 @@ function Shortcuts.init(designer)
 		local func = opts.f
 		opts.f = function()
 			for i = 1, opts.n do
+				designer:push_index(i)
 				designer:run_with_curs{dx=0, dy=0, f=function()
 					func(i)
 				end}
+				designer:pop_index(i)
 			end
 		end
 		designer:run_with_curs(opts)
 	end
 	Shortcuts.set_global('array', array)
+
+	local function apply_index(name)
+		return designer:apply_index(name)
+	end
+	Shortcuts.set_global('iname', apply_index)
 
 	local function schem(opts)
 		designer:instantiate_schem(opts.f, opts)

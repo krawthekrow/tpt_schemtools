@@ -42,10 +42,9 @@ local function disp56_core(opts)
 			-- These DRAYs duplicate an INSL downwards.
 			-- Their tmp2s will be configured later once the double buffer
 			-- position is known.
-			local name_prefix = 'dray_deferred_' .. i .. '_' .. j
 			aport{v='dray_deferred'}
-			dray{r=1, v=name_prefix .. '_1', done=0}
-			dray{r=1, v=name_prefix .. '_2'}
+			dray{r=1, iv='dray_deferred_1', done=0}
+			dray{r=1, iv='dray_deferred_2'}
 		end}
 	end}
 
@@ -123,7 +122,7 @@ local function disp56_core(opts)
 
 			aport{v='sprk_targets'}
 			aport{v='sprk_targets_row_' .. i}
-			port{v='sprk_target_' .. i .. '_' .. j}
+			port{iv='sprk_target'}
 			if i == 1 then
 				-- This INSL is replaced with a sparker for the ARAY each frame.
 				-- We only do this for the top row, because in the other rows
@@ -288,14 +287,18 @@ local function disp56_core(opts)
 	port{v='double_buffer_nw', f=function(opts)
 		disp_matrix{p=opts.p, f=function(i, j)
 			-- Copy the pixel colors into the double buffer.
-			local name_prefix = 'dray_deferred_' .. i .. '_' .. j
-			local target_name = 'dray_target_' .. i .. '_' .. j
-			port{v=target_name}
-			pconfig{part=v(name_prefix .. '_1'), to=v(target_name)}
-			pconfig{part=v(name_prefix .. '_2'), to=v(target_name):s()}
+			port{iv='dray_target'}
+			pconfig{
+				part=v(iname('dray_deferred_1')),
+				to=iv('dray_target')
+			}
+			pconfig{
+				part=v(iname('dray_deferred_2')),
+				to=iv('dray_target'):s()
+			}
 
 			-- Placeholders to show where the double buffer is.
-			chain{dy=1, p=v(target_name), f=function()
+			chain{dy=1, p=iv('dray_target'), f=function()
 				aport{v='double_buffer'}
 				part{elem_name=PIXCOL_TYPE}
 				aport{v='double_buffer'}

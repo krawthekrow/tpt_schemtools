@@ -23,7 +23,7 @@ function shr_1(opts)
 					'is not annihilated.'
 				}
 			end
-			port{v='dtec_loc'}; inwr{}
+			port{iv='dtec_loc'}; inwr{}
 			filt{mode='set'}
 
 			inwr{}
@@ -35,7 +35,7 @@ function shr_1(opts)
 			aport{v='inslcol'}
 			insl{}
 
-			dtec{p=v('dtec_loc'), to=v('brayrow_n'), under=1}
+			dtec{p=iv('dtec_loc'), to=v('brayrow_n'), under=1}
 		end}
 	end}
 

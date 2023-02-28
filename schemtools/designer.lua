@@ -155,6 +155,22 @@ function Designer:get_var(name)
 	return schem.varstore:get_var(name)
 end
 
+function Designer:get_indexed_var(name)
+	return self:top().varstore:get_indexed_var(name)
+end
+
+function Designer:apply_index(name)
+	return self:top().varstore:apply_index(name)
+end
+
+function Designer:push_index(index)
+	self:top().varstore:push_index(index)
+end
+
+function Designer:pop_index()
+	self:top().varstore:pop_index()
+end
+
 function Designer:run_with_ctx(ctx, func)
 	if ctx == '' then
 		func()
@@ -219,16 +235,20 @@ end
 
 function Designer:port(opts)
 	opts = self:opts_pos(opts)
-	if opts.v == nil and opts.cmt ~= nil then opts.v = self:autogen_name('cmt') end
+	if opts.v == nil and opts.cmt ~= nil then
+		opts.v = self:autogen_name('cmt')
+	end
+	if opts.iv ~= nil then
+		opts.v = self:apply_index(opts.iv)
+	end
 
 	local schem = self:top()
 	local existing_val = self:get_var_raw(opts.v)
-	if existing_val ~= nil then
-		assert(
-			getmetatable(existing_val) == Port,
-			'variable "' .. opts.v .. '" already used for non-port'
-		)
-	end
+	-- ports should only be defined once
+	assert(
+		existing_val == nil,
+		'variable "' .. opts.v .. '" already in use'
+	)
 	self:set_var(opts.v, Port:new(opts.p, opts.f, opts.cmt))
 end
 
@@ -645,6 +665,10 @@ function Designer:part(opts)
 	opts = self:opts_part(opts)
 	opts = self:opts_bool(opts, 'done', true)
 	opts = self:opts_bool(opts, 'under', false)
+
+	if opts.iv ~= nil then
+		opts.v = self:apply_index(opts.iv)
+	end
 
 	local t = opts['type']
 

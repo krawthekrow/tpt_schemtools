@@ -8,6 +8,8 @@ function VariableStore:new()
 	local o = {
 		-- schematic context to be prepended when expanding variable names
 		ctx_stack = {},
+		-- index suffix to be appended when referencing indexed vars
+		index_stack = {},
 		vars = {},
 	}
 	setmetatable(o, self)
@@ -27,6 +29,24 @@ end
 
 function VariableStore:end_ctx()
 	table.remove(self.ctx_stack)
+end
+
+function VariableStore:top_index()
+	if #self.index_stack == 0 then return '' end
+	return self.index_stack[#self.index_stack]
+end
+
+function VariableStore:apply_index(name)
+	return name .. self:top_index()
+end
+
+function VariableStore:push_index(index)
+	local new_suffix = self:top_index() .. '_' .. index
+	table.insert(self.index_stack, new_suffix)
+end
+
+function VariableStore:pop_index()
+	table.remove(self.index_stack)
 end
 
 function VariableStore:expand_var_name(name)
@@ -62,6 +82,10 @@ function VariableStore:get_var(name)
 		return val.p
 	end
 	return val
+end
+
+function VariableStore:get_indexed_var(name)
+	return self:get_var(self:apply_index(name))
 end
 
 function VariableStore:translate(shift_p, translators)
