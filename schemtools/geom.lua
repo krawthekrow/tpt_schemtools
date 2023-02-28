@@ -1,4 +1,4 @@
-Geom = {}
+local Geom = {}
 
 -- treat this as immutable
 local Point = {}
