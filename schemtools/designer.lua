@@ -75,7 +75,7 @@ end
 -- translation functions when placing an offsetted schematic
 local DEFAULT_PORT_TRANSLATORS = {
 	[Port] = function(p, shift_p)
-		p.p = p.p:add(shift_p)
+		p.val = p.val:add(shift_p)
 	end,
 	[ArrayPort] = function(ap, shift_p)
 		ap.val = ap.val:add(shift_p)
@@ -243,6 +243,9 @@ function Designer:port(opts)
 	if opts.iv ~= nil then
 		opts.v = self:apply_index(opts.iv)
 	end
+	if opts.val == nil then
+		opts.val = opts.p
+	end
 
 	local schem = self:top()
 	local existing_val = self:get_var_raw(opts.v)
@@ -251,7 +254,7 @@ function Designer:port(opts)
 		existing_val == nil,
 		'variable "' .. opts.v .. '" already in use'
 	)
-	self:set_var(opts.v, Port:new(opts.p, opts.f, opts.cmt))
+	self:set_var(opts.v, Port:new(opts.val, opts.f, opts.cmt))
 end
 
 -- Create a port with the same value of an existing port.
@@ -267,7 +270,7 @@ function Designer:port_alias(opts)
 		self:set_var(opts.to, ArrayPort:new(orig.val))
 		return
 	end
-	self:port{v=opts.to, p=orig.p, f=function(args)
+	self:port{v=opts.to, p=orig.val, f=function(args)
 		self:run_with_ctx(ctx, function()
 			orig.connect_func(args)
 		end)
@@ -862,13 +865,14 @@ function Designer:plot_schem(opts)
 
 	for _, var in pairs(schem.varstore.vars) do
 		if getmetatable(var) == Port and var.cmt ~= nil then
-			if self.comments[var.p.y] == nil then
-				self.comments[var.p.y] = {}
+			local p = var.val
+			if self.comments[p.y] == nil then
+				self.comments[p.y] = {}
 			end
-			if self.comments[var.p.y][var.p.x] == nil then
-				self.comments[var.p.y][var.p.x] = var.cmt
+			if self.comments[p.y][p.x] == nil then
+				self.comments[p.y][p.x] = var.cmt
 			else
-				self.comments[var.p.y][var.p.x] = self.comments[var.p.y][var.p.x] .. '\n\n' .. var.cmt
+				self.comments[p.y][p.x] = self.comments[p.y][p.x] .. '\n\n' .. var.cmt
 			end
 		end
 	end

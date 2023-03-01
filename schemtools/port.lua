@@ -1,7 +1,7 @@
 local Port = {}
-function Port:new(p, connect_func, cmt)
+function Port:new(val, connect_func, cmt)
 	local o = {
-		p = p,
+		val = val,
 		connect_func = connect_func,
 		cmt = cmt,
 	}

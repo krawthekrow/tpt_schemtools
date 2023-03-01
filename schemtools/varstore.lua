@@ -88,7 +88,7 @@ function VariableStore:get_var(name)
 		'variable "' .. name .. '" does not exist'
 	)
 	if getmetatable(val) == Port then
-		return val.p
+		return val.val
 	end
 	if getmetatable(val) == ArrayPort then
 		return val.val
