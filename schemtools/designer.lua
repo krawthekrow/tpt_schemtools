@@ -2,7 +2,6 @@ local Util = require('schemtools/util')
 local Options = require('schemtools/options')
 local Geom = require('schemtools/geom')
 local Port = require('schemtools/port')
-local ArrayPort = require('schemtools/arrayport')
 local VariableStore = require('schemtools/varstore')
 local Tester = require('schemtools/tester')
 local Point = Geom.Point
@@ -76,9 +75,6 @@ end
 local DEFAULT_PORT_TRANSLATORS = {
 	[Port] = function(p, shift_p)
 		p.val = p.val:add(shift_p)
-	end,
-	[ArrayPort] = function(ap, shift_p)
-		ap.val = ap.val:add(shift_p)
 	end,
 }
 
@@ -266,15 +262,15 @@ function Designer:port_alias(opts)
 	local ctx, name = self:parse_full_var_name(opts.from)
 	local orig = self:get_var_raw(opts.from)
 	if opts.to == nil then opts.to = name end
-	if getmetatable(orig) == ArrayPort then
-		self:set_var(opts.to, ArrayPort:new(orig.val))
-		return
+	local connect_func = nil
+	if orig.connect_func ~= nil then
+		connect_func = function(args)
+			self:run_with_ctx(ctx, function()
+				orig.connect_func(args)
+			end)
+		end
 	end
-	self:port{v=opts.to, p=orig.val, f=function(args)
-		self:run_with_ctx(ctx, function()
-			orig.connect_func(args)
-		end)
-	end}
+	self:port{v=opts.to, val=orig.val, f=connect_func}
 end
 
 function Designer:array_port(opts)
@@ -285,7 +281,12 @@ function Designer:array_port(opts)
 		existing_val:expand(opts.p)
 		return
 	end
-	self:set_var(opts.v, ArrayPort:from_p(opts.p))
+	assert(
+		opts.f == nil and opts.cmt == nil,
+		'f/cmt not supported on array ports yet'
+	)
+	local port = Port:new(Rect:new(opts.p, opts.p), opts.f, opts.cmt)
+	self:set_var(opts.v, port)
 end
 
 function Designer:begin_schem()

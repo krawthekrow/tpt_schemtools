@@ -1,7 +1,6 @@
 local Util = require('schemtools/util')
 local Geom = require('schemtools/geom')
 local Port = require('schemtools/port')
-local ArrayPort = require('schemtools/arrayport')
 local Point = Geom.Point
 local Rect = Geom.Rect
 
@@ -60,17 +59,12 @@ end
 function VariableStore:set_var(name, val)
 	name = self:expand_var_name(name)
 	if
-		getmetatable(self.vars[name]) == Port and
-		getmetatable(val) == Point
+		getmetatable(self.vars[name]) == Port and (
+			getmetatable(val) == Point or
+			getmetatable(val) == Rect
+		)
 	then
 		self.vars[name].p = val
-		return
-	end
-	if
-		getmetatable(self.vars[name]) == ArrayPort and
-		getmetatable(val) == Rect
-	then
-		self.vars[name].val = val
 		return
 	end
 	self.vars[name] = val
@@ -88,9 +82,6 @@ function VariableStore:get_var(name)
 		'variable "' .. name .. '" does not exist'
 	)
 	if getmetatable(val) == Port then
-		return val.val
-	end
-	if getmetatable(val) == ArrayPort then
 		return val.val
 	end
 	return val
