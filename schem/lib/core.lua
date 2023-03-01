@@ -8,7 +8,7 @@ end
 
 function stacked_dray(opts)
 	opts = opts_bool(opts, 'done', true)
-	opts = opts_aport(opts, 'to', 's', 'e')
+	opts = opts_rect_line(opts, 'to', 's', 'e')
 	if opts.off == nil then opts.off = 0 end
 	if opts.r == nil then opts.r = 1 end
 	local cover_range = odist(opts.s, opts.e) + 1
@@ -44,7 +44,7 @@ end
 -- - List of ExponentialDraySpec containing r and j for each DRAY.
 function get_exponential_dray_configs(opts)
 	opts = opts_bool(opts, 'skip_curs_check', false)
-	opts = opts_aport(opts, 'to', 's', 'e')
+	opts = opts_rect_line(opts, 'to', 's', 'e')
 	if not opts.skip_curs_check and opts.s ~= nil then
 		assert(
 			odist(getcurs(), opts.s) == 1,

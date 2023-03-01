@@ -46,7 +46,7 @@ function Shortcuts.init(designer)
 	local designer_methods_to_expose = {
 		'opts_bool',
 		'opts_pos',
-		'opts_aport',
+		'opts_rect_line',
 		'port',
 		'port_alias',
 		'connect',

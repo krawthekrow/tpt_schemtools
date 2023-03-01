@@ -65,6 +65,17 @@ function Util.dump_var(x, custom_dump)
 	print(dump_var_inner(x, ''))
 end
 
+function Util.soft_assert(pred, msg)
+	if not pred then
+		if msg == nil then
+			print('soft assert failed')
+		else
+			print('soft assert failed: ' .. msg)
+		end
+		print(debug.traceback())
+	end
+end
+
 function Util.str_split(str, delimiter)
   local result = {}
   local from = 1
@@ -129,5 +140,17 @@ Util.CONDUCTORS = {
 }
 
 Util.FRME_RANGE = 15
+
+local function make_part_fields()
+	local d = {}
+	for k, v in pairs(sim) do
+		if Util.str_startswith(k, Util.FIELD_PREFIX) then
+			local field_name = k:sub(Util.FIELD_PREFIX:len() + 1):lower()
+			d[field_name] = v
+		end
+	end
+	return d
+end
+Util.PART_FIELDS = make_part_fields()
 
 return Util

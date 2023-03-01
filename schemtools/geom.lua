@@ -238,4 +238,22 @@ function Geom.Constraints.solve_2ray(r1, r2)
 	return sol
 end
 
+function Geom.is_orth(from, to)
+	local dp = to:sub(from)
+	return dp.x == 0 or dp.y == 0 or math.abs(dp.x) == math.abs(dp.y)
+end
+
+function Geom.assert_orth(from, to)
+	assert(
+		Geom.is_orth(from, to),
+		'target not in one of the ordinal directions'
+	)
+end
+
+function Geom.get_orth_dist(from, to)
+	Geom.assert_orth(from, to)
+	local dp = to:sub(from)
+	return math.max(math.abs(dp.x), math.abs(dp.y))
+end
+
 return Geom

@@ -2,6 +2,7 @@ local Util = require('schemtools/util')
 local Options = require('schemtools/options')
 local Geom = require('schemtools/geom')
 local Port = require('schemtools/port')
+local Particle = require('schemtools/particle')
 local VariableStore = require('schemtools/varstore')
 local Tester = require('schemtools/tester')
 local Point = Geom.Point
@@ -23,6 +24,10 @@ function Schematic:new()
 		-- parts[y][x] is a list of particles at (x, y) in stack order
 		-- in schematics, particles can take negative coordinates
 		parts = {},
+		-- For performance, track particles that need to be resolved
+		-- and only resolve those when placing schematics. Note that
+		-- resolving a particle should still be idempotent.
+		unresolved_parts = {},
 		varstore = VariableStore:new(),
 	}
 	setmetatable(o, self)
@@ -106,14 +111,7 @@ function Designer:top()
 end
 
 function Designer:soft_assert(pred, msg)
-	if not pred then
-		if msg == nil then
-			print('soft assert failed')
-		else
-			print('soft assert failed: ' .. msg)
-		end
-		print(debug.traceback())
-	end
+	Util.soft_assert(pred, msg)
 end
 
 function Designer:autogen_name(tag)
@@ -363,20 +361,6 @@ function Designer:run_with_curs(opts)
 	end
 end
 
-local PART_FIELDS = {}
-
-local function lazy_init_part_fields()
-	if #PART_FIELDS > 0 then
-		return
-	end
-	for k, v in pairs(sim) do
-		if Util.str_startswith(k, Util.FIELD_PREFIX) then
-			local field_name = k:sub(Util.FIELD_PREFIX:len() + 1):lower()
-			PART_FIELDS[field_name] = v
-		end
-	end
-end
-
 function Designer:opts_pt(opts, pname, xname, yname, ref, force)
 	return Options.opts_pt(opts, pname, xname, yname, ref, force)
 end
@@ -394,26 +378,17 @@ function Designer:opts_bool(opts, name, dflt)
 	return Options.opts_bool(opts, name, dflt)
 end
 
-local function decode_elem(name)
-	return elem[Util.ELEM_PREFIX .. name:upper()]
-end
-
-local function check_orth(from, to)
-	local dp = to:sub(from)
-	assert(
-		dp.x == 0 or dp.y == 0 or math.abs(dp.x) == math.abs(dp.y),
-		'target not in one of the ordinal directions'
-	)
+function Designer:opts_rect_line(opts, rect_name, s_name, e_name, ref)
+	if ref == nil then ref = self:get_curs() end
+	return Options.opts_rect_line(opts, rect_name, s_name, e_name, ref)
 end
 
 function Designer:get_orth_dist(from, to)
-	check_orth(from, to)
-	local dp = to:sub(from)
-	return math.max(math.abs(dp.x), math.abs(dp.y))
+	return Geom.get_orth_dist(from, to)
 end
 
 function Designer:get_orth_dir(from, to)
-	check_orth(from, to)
+	Geom.assert_orth(from, to)
 	local dp = to:sub(from)
 	if dp.x > 0 then dp.x = 1 end
 	if dp.x < 0 then dp.x = -1 end
@@ -422,210 +397,12 @@ function Designer:get_orth_dir(from, to)
 	return dp
 end
 
-function Designer:get_dtec_dist(from, to)
-	local dp = to:sub(from)
-	return math.max(math.abs(dp.x), math.abs(dp.y))
-end
-
--- custom prop names
-local function custom_elem_match(t, target_type)
-	if target_type == 'any' then return true end
-	if target_type == 'conduct' then
-		return Util.arr_contains(Util.CONDUCTORS, t)
+function Designer:resolve_parts()
+	local schem = self:top()
+	for _, part in ipairs(schem.unresolved_parts) do
+		part:resolve()
 	end
-	return t == elem[Util.ELEM_PREFIX .. target_type:upper()]
-end
-
-function Designer:opts_aport(opts, aport_name, s_name, e_name, ref)
-	if ref == nil then ref = self:get_curs() end
-	if opts[aport_name] == nil then return opts end
-	local aport = opts[aport_name]
-	if getmetatable(aport) ~= Rect then return opts end
-	local is_horz = aport:is_horz()
-	local is_vert = aport:is_vert()
-	assert(
-		(is_horz and not is_vert) or (is_vert and not is_horz),
-		'array port not linear'
-	)
-	local pt1, pt2 = nil, nil
-	if is_horz then pt1, pt2 = aport:w(0), aport:e(0) end
-	if is_vert then pt1, pt2 = aport:n(0), aport:s(0) end
-	local dist1 = self:get_orth_dist(ref, pt1)
-	local dist2 = self:get_orth_dist(ref, pt2)
-	if dist1 < dist2 then
-		opts[s_name], opts[e_name] = pt1, pt2
-	else
-		opts[s_name], opts[e_name] = pt2, pt1
-	end
-	opts[aport_name] = nil
-	return opts
-end
-
-function Designer:opts_part(opts)
-	opts = self:opts_pos(opts)
-
-	if opts.elem_name ~= nil then
-		opts['type'] = decode_elem(opts.elem_name)
-	end
-	local t = opts['type']
-
-	local from_to_pos_enabled = {
-		elem.DEFAULT_PT_CRAY,
-		elem.DEFAULT_PT_DRAY,
-		elem.DEFAULT_PT_LDTC,
-		elem.DEFAULT_PT_DTEC,
-	}
-
-	local function expand_aport(target_type, aport_name, s_name, e_name)
-		if not custom_elem_match(t, target_type) then return end
-		opts = self:opts_aport(opts, aport_name, s_name, e_name, opts.from)
-	end
-	expand_aport('cray', 'to', 's', 'e')
-	expand_aport('dray', 'to', 'tos', 'toe')
-	expand_aport('ldtc', 'to', 's', 'e')
-
-	local do_from_to_pos = Util.arr_contains(from_to_pos_enabled, t)
-	if do_from_to_pos then
-		opts = self:opts_pt(opts, 'from', 'fromx', 'fromy', opts.p)
-		opts = self:opts_pt(opts, 'to', 'tox', 'toy', opts.from, false)
-	end
-
-	local function calc_r(target_type, s_name, e_name)
-		if opts[s_name] == nil or opts[e_name] == nil then return end
-		if not custom_elem_match(t, target_type) then return end
-		opts.r = self:get_orth_dist(opts[s_name], opts[e_name]) + 1
-	end
-	calc_r('cray', 's', 'e')
-	calc_r('dray', 'tos', 'toe')
-	calc_r('ldtc', 's', 'e')
-
-	local function parse_custom(custom_prop, target_type, prop, func)
-		if opts[custom_prop] == nil then return end
-		if not custom_elem_match(t, target_type) then return end
-		opts[prop] = func(opts[custom_prop])
-	end
-	local function prop_id(x) return x end
-	local function prop_pstn_r(x)
-		return x * 10 + Util.CELSIUS_BASE
-	end
-	local function prop_elem(x)
-		if type(x) == 'string' then return decode_elem(x) end
-		return x
-	end
-	local function prop_cray_start(s)
-		local j = self:get_orth_dist(opts.from, s) - 1
-		self:soft_assert(j >= 0, 'negative jump requested')
-		return j
-	end
-	local function prop_dray_start(s)
-		if opts.tmp == nil then opts.tmp = 1 end
-		local j = self:get_orth_dist(opts.from, s) - opts.tmp - 1
-		self:soft_assert(j >= 0, 'negative jump requested')
-		return j
-	end
-	local function prop_cray_end(e)
-		if opts.tmp == nil then opts.tmp = 1 end
-		local j = self:get_orth_dist(opts.from, e) - opts.tmp
-		self:soft_assert(j >= 0, 'negative jump requested')
-		return j
-	end
-	local function prop_dray_end(e)
-		if opts.tmp == nil then opts.tmp = 1 end
-		local j = self:get_orth_dist(opts.from, e) - opts.tmp - opts.tmp
-		self:soft_assert(j >= 0, 'negative jump requested')
-		return j
-	end
-	local function prop_dtec_to(to)
-		return self:get_dtec_dist(opts.from, to)
-	end
-	local function prop_filt_mode(s)
-		local filt_mode_names = {
-			'set', 'and', 'or', 'sub',
-			'<<', '>>', 'noeff', 'xor',
-			'not', 'scat', '<<<', '>>>',
-		}
-		for i, v in ipairs(filt_mode_names) do
-			if s == v then
-				return i - 1
-			end
-		end
-		self:soft_assert(false, 'filt mode "' .. s .. '" not recognized')
-		print('available filt modes:')
-		Util.dump_var(filt_mode_names)
-		return 0
-	end
-	local function prop_frme_sticky(x)
-		if type(x) == 'number' then
-			if x == 0 then x = false else x = true end
-		end
-		-- tmp = 0 makes FRME sticky, so invert
-		if x then return 0 else return 1 end
-	end
-	parse_custom('r', 'pstn', 'temp', prop_pstn_r)
-	parse_custom('r', 'cray', 'tmp', prop_id)
-	parse_custom('r', 'dray', 'tmp', prop_id)
-	parse_custom('r', 'ldtc', 'tmp', prop_id)
-	parse_custom('r', 'dtec', 'tmp2', prop_id)
-	parse_custom('j', 'cray', 'tmp2', prop_id)
-	parse_custom('j', 'dray', 'tmp2', prop_id)
-	parse_custom('j', 'ldtc', 'life', prop_id)
-	parse_custom('ct', 'any', 'ctype', prop_id)
-	parse_custom('ctype', 'any', 'ctype', prop_elem)
-	parse_custom('from', 'conv', 'tmp', prop_elem)
-	parse_custom('to', 'conv', 'ctype', prop_elem)
-	parse_custom('to', 'cray', 'tmp2', prop_cray_start)
-	parse_custom('s', 'cray', 'tmp2', prop_cray_start)
-	parse_custom('e', 'cray', 'tmp2', prop_cray_end)
-	parse_custom('to', 'dray', 'tmp2', prop_dray_start)
-	parse_custom('tos', 'dray', 'tmp2', prop_dray_start)
-	parse_custom('toe', 'dray', 'tmp2', prop_dray_end)
-	parse_custom('to', 'ldtc', 'life', prop_cray_start)
-	parse_custom('s', 'ldtc', 'life', prop_cray_start)
-	parse_custom('e', 'ldtc', 'life', prop_cray_end)
-	parse_custom('to', 'dtec', 'tmp2', prop_dtec_to)
-	parse_custom('mode', 'filt', 'tmp', prop_filt_mode)
-	parse_custom('sticky', 'frme', 'tmp', prop_frme_sticky)
-	parse_custom('cap', 'pstn', 'tmp', prop_id)
-
-	local function check_geq(target_type, prop_name, bound)
-		if bound == nil then bound = 0 end
-		if not custom_elem_match(t, target_type) then return end
-		if opts[prop_name] == nil then return end
-		self:soft_assert(
-			opts[prop_name] >= bound,
-			prop_name .. ' must be at least ' .. bound ..
-			' but ' .. opts[prop_name] .. ' requested'
-		)
-	end
-	local function check_leq(target_type, prop_name, bound)
-		if bound == nil then bound = 0 end
-		if not custom_elem_match(t, target_type) then return end
-		if opts[prop_name] == nil then return end
-		self:soft_assert(
-			opts[prop_name] <= bound,
-			prop_name .. ' must be at most ' .. bound ..
-			' but ' .. opts[prop_name] .. ' requested'
-		)
-	end
-	check_geq('any', 'temp', 0)
-	check_leq('dtec', 'tmp2', 25)
-	check_geq('cray', 'tmp', 0)
-	check_geq('dray', 'tmp', 0)
-	check_geq('ldtc', 'tmp', 0)
-	check_geq('cray', 'tmp2', 0)
-	check_geq('dray', 'tmp2', 0)
-	check_geq('ldtc', 'life', 0)
-
-	return opts
-end
-
-local function config_part(part, opts)
-	for field_name, _ in pairs(PART_FIELDS) do
-		local val = opts[field_name]
-		if val ~= nil then
-			part[field_name] = val
-		end
-	end
+	schem.unresolved_parts = {}
 end
 
 function Designer:pconfig(opts)
@@ -633,45 +410,20 @@ function Designer:pconfig(opts)
 		opts[k] = v
 	end
 	opts.from = Point:new(opts.part.x, opts.part.y)
-	opts = self:opts_part(opts)
-	config_part(opts.part, opts)
+	opts.part:config(opts)
+	table.insert(self:top().unresolved_parts, opts.part)
 end
 
 function Designer:part(opts)
-	opts = self:opts_part(opts)
+	opts = self:opts_pos(opts)
 	opts = self:opts_bool(opts, 'done', true)
 	opts = self:opts_bool(opts, 'under', false)
-
 	if opts.iv ~= nil then
 		opts.v = self:apply_index(opts.iv)
 	end
 
-	local t = opts['type']
-
-	-- custom default values
-	local function default_prop(target_type, prop, val)
-		if custom_elem_match(t, target_type) and opts[prop] == nil then
-			opts[prop] = val
-		end
-	end
-	default_prop('filt', 'tmp', Util.FILT_MODES.NOP)
-	default_prop('aray', 'life', 1)
-	default_prop('cray', 'ctype', elem.DEFAULT_PT_SPRK)
-	default_prop('cray', 'tmp', 1)
-	default_prop('dray', 'tmp', 1)
-	default_prop('ldtc', 'tmp', 1)
-
-	if opts.sprk then
-		-- pre-spark
-		assert(Util.arr_contains(Util.CONDUCTORS, t))
-		opts.ctype = t
-		opts['type'] = elem.DEFAULT_PT_SPRK
-		if opts.life == nil then opts.life = 4 end
-	end
-
-	lazy_init_part_fields()
-	local part = {}
-	config_part(part, opts)
+	local part = Particle:from_opts(opts)
+	table.insert(self:top().unresolved_parts, part)
 
 	if opts.v ~= nil then self:set_var(opts.v, part) end
 
@@ -694,6 +446,8 @@ function Designer:place_schem(child_schem, opts)
 	if opts.v == nil then opts.v = self:autogen_name('schem') end
 	local schem = self:top()
 	self:push_curs(Point:new(0, 0))
+
+	self:resolve_parts()
 
 	-- Amount to shift schematic by, if necessary.
 	local shift_p = Point:new(0, 0)
@@ -841,9 +595,10 @@ end
 function Designer:plot_schem(opts)
 	opts = self:opts_pos(opts)
 
-	local schem = self:top()
-
+	self:resolve_parts()
 	reload_particle_order()
+
+	local schem = self:top()
 	schem:for_each_part(function(p, part)
 		p = p:add(opts.p)
 		if p.x < 0 or p.y < 0 then
@@ -854,7 +609,7 @@ function Designer:plot_schem(opts)
 			sim.partCreate(-3, x, y, part.ctype)
 		end
 		local id = sim.partCreate(-3, x, y, t)
-		for field_name, _ in pairs(PART_FIELDS) do
+		for field_name, _ in pairs(Util.PART_FIELDS) do
 			local val = part[field_name]
 			if field_name ~= 'x' and field_name ~= 'y' and val ~= nil then
 				local field_id = sim[Util.FIELD_PREFIX .. field_name:upper()]
