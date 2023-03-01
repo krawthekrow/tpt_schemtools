@@ -6,6 +6,7 @@ local ArrayPort = require('schemtools/arrayport')
 local VariableStore = require('schemtools/varstore')
 local Tester = require('schemtools/tester')
 local Point = Geom.Point
+local Rect = Geom.Rect
 local Constraints = Geom.Constraints
 
 local Cursor = {}
@@ -77,7 +78,7 @@ local DEFAULT_PORT_TRANSLATORS = {
 		p.p = p.p:add(shift_p)
 	end,
 	[ArrayPort] = function(ap, shift_p)
-		ap:add_in_place(shift_p)
+		ap.val = ap.val:add(shift_p)
 	end,
 }
 
@@ -263,7 +264,7 @@ function Designer:port_alias(opts)
 	local orig = self:get_var_raw(opts.from)
 	if opts.to == nil then opts.to = name end
 	if getmetatable(orig) == ArrayPort then
-		self:set_var(opts.to, ArrayPort:clone(orig))
+		self:set_var(opts.to, ArrayPort:new(orig.val))
 		return
 	end
 	self:port{v=opts.to, p=orig.p, f=function(args)
@@ -281,7 +282,7 @@ function Designer:array_port(opts)
 		existing_val:expand(opts.p)
 		return
 	end
-	self:set_var(opts.v, ArrayPort:new(opts.p))
+	self:set_var(opts.v, ArrayPort:from_p(opts.p))
 end
 
 function Designer:begin_schem()
@@ -435,7 +436,7 @@ function Designer:opts_aport(opts, aport_name, s_name, e_name, ref)
 	if ref == nil then ref = self:get_curs() end
 	if opts[aport_name] == nil then return opts end
 	local aport = opts[aport_name]
-	if getmetatable(aport) ~= ArrayPort then return opts end
+	if getmetatable(aport) ~= Rect then return opts end
 	local is_horz = aport:is_horz()
 	local is_vert = aport:is_vert()
 	assert(

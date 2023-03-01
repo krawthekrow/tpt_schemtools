@@ -92,7 +92,7 @@ function Shortcuts.init(designer)
 			opts.n = designer:get_orth_dist(opts.p, opts.to) + 1
 
 			-- allow striding
-			local dplen = designer:get_orth_dist(Point:zero(), opts.dp)
+			local dplen = designer:get_orth_dist(Point.ZERO, opts.dp)
 			if dplen ~= 0 then
 				opts.n = Util.floordiv(opts.n, dplen)
 			end

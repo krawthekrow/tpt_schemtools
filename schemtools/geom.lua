@@ -12,9 +12,8 @@ function Point:new(x, y)
 	return p
 end
 
-function Point:zero()
-	return Point:new(0, 0)
-end
+Point.ZERO = Point:new(0, 0)
+Point.ONE = Point:new(1, 1)
 
 function Point:lensq()
 	return self.x * self.x + self.y * self.y
@@ -78,6 +77,125 @@ end
 function Point:se(n)
 	if n == nil then n = 1 end
 	return self:add(Point:new(n, n))
+end
+
+-- treat this as immutable
+local Rect = {}
+Geom.Rect = Rect
+function Rect:new(lb, ub)
+	local o = {
+		lb = lb,
+		ub = ub,
+	}
+	setmetatable(o, self)
+	self.__index = self
+	return o
+end
+
+function Rect:is_horz()
+	return self:sz().y == 1
+end
+function Rect:is_vert()
+	return self:sz().x == 1
+end
+
+function Rect:assert_horz()
+	assert(self:is_horz(), 'rect is not a horizontal line')
+end
+function Rect:assert_vert()
+	assert(self:is_vert(), 'rect is not a vertical line')
+end
+
+-- Always specify navigation steps explicitly for rects
+-- to reduce confusion. Navigation is defined so that navigating
+-- from a 1x1 rect is similar to navigating from a point.
+
+function Rect:nw(n)
+	assert(n ~= nil, 'rect nav step must be explicit')
+	return self.lb:nw(n)
+end
+function Rect:ne(n)
+	assert(n ~= nil, 'rect nav step must be explicit')
+	return Point:new(self.ub.x, self.lb.y):ne(n)
+end
+function Rect:sw(n)
+	assert(n ~= nil, 'rect nav step must be explicit')
+	return Point:new(self.lb.x, self.ub.y):sw(n)
+end
+function Rect:se(n)
+	assert(n ~= nil, 'rect nav step must be explicit')
+	return self.ub:se(n)
+end
+
+-- Navigating off a side of width >1 should only be used when
+-- the coordinate along that axis is not important. To catch bugs,
+-- randomize that coordinate.
+
+local RANDOMIZE_RECT_NAV_SRC = true
+local function get_rect_nav_rand(l)
+	if not RANDOMIZE_RECT_NAV_SRC then
+		return 0
+	end
+	return math.random(l) - 1
+end
+
+function Rect:n(n)
+	assert(n ~= nil, 'rect nav step must be explicit')
+	return self:nw(0):e(get_rect_nav_rand(self:sz().x)):n(n)
+end
+function Rect:s(n)
+	assert(n ~= nil, 'rect nav step must be explicit')
+	return self:sw(0):e(get_rect_nav_rand(self:sz().x)):s(n)
+end
+function Rect:w(n)
+	assert(n ~= nil, 'rect nav step must be explicit')
+	return self:nw(0):s(get_rect_nav_rand(self:sz().y)):w(n)
+end
+function Rect:e(n)
+	assert(n ~= nil, 'rect nav step must be explicit')
+	return self:ne(0):s(get_rect_nav_rand(self:sz().y)):e(n)
+end
+
+-- Navigate from line. Only allows navigating off along the
+-- long edge of a width-1 line.
+
+function Rect:ln(n)
+	self:assert_vert()
+	return self:n(n)
+end
+function Rect:ls(n)
+	self:assert_vert()
+	return self:s(n)
+end
+function Rect:lw(n)
+	self:assert_horz()
+	return self:w(n)
+end
+function Rect:le(n)
+	self:assert_horz()
+	return self:e(n)
+end
+
+function Rect:x() self:assert_vert(); return self.lb.x end
+function Rect:y() self:assert_horz(); return self.lb.y end
+
+function Rect:sz()
+	return self.ub:sub(self.lb):add(Point.ONE)
+end
+
+function Rect:expand_to_p(p)
+	return Rect:new(
+		Point:new(math.min(p.x, self.lb.x), math.min(p.y, self.lb.y)),
+		Point:new(math.max(p.x, self.ub.x), math.max(p.y, self.ub.y))
+	)
+end
+
+function Rect:add(p)
+	return Rect:new(self.lb:add(p), self.ub:add(p))
+end
+
+function Rect:sub(p)
+	return Rect:new(self.lb:sub(p), self.ub:sub(p))
 end
 
 Geom.Constraints = {}

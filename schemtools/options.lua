@@ -5,7 +5,7 @@ local Options = {}
 
 function Options.opts_pt(opts, pname, xname, yname, ref, force)
 	if force == nil then force = true end
-	if ref == nil then ref = Point:zero() end
+	if ref == nil then ref = Point.ZERO end
 	if opts == nil then
 		if force then opts = { p = ref } else opts = {} end
 	end
@@ -30,7 +30,7 @@ end
 
 function Options.opts_pt_short(opts, ref, force)
 	if force == nil then force = true end
-	if ref == nil then ref = Point:zero() end
+	if ref == nil then ref = Point.ZERO end
 	if opts == nil then
 		if force then opts = { p = ref } else opts = {} end
 	end
