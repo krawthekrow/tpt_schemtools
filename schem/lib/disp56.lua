@@ -475,7 +475,7 @@ local function make_pixcol_propagator()
 				local placeholders_range = odist(
 					placeholders_n, placeholders_s
 				) + 1
-				soft_assert(placeholders_range % 2 == 0, 'expect range to be even')
+				assert(placeholders_range % 2 == 0, 'expect range to be even')
 				local num_placeholders = intdiv(placeholders_range, 2)
 				local seed_index = (i + num_placeholders % 2) % 2 + 1
 				array{

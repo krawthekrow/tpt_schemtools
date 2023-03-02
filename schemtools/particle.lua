@@ -76,7 +76,7 @@ local function prop_filt_mode(s)
 			return i - 1
 		end
 	end
-	self:soft_assert(false, 'filt mode "' .. s .. '" not recognized')
+	assert(false, 'filt mode "' .. s .. '" not recognized')
 	print('available filt modes:')
 	Util.dump_var(filt_mode_names)
 	return 0
@@ -393,7 +393,7 @@ local function do_bounds_check(part, bounds_check)
 	else
 		assert(false, 'unrecognized bounds check type')
 	end
-	Util.soft_assert(
+	assert(
 		val >= bound,
 		prop .. ' must be at least ' .. bound ..
 		' but ' .. val .. ' requested'
@@ -401,21 +401,23 @@ local function do_bounds_check(part, bounds_check)
 end
 
 function Particle:resolve()
-	local part = self
+	Util.wrap_with_xpcall(function()
+		local part = self
 
-	local resolve_funcs = elem_multidict_lookup(RESOLVE_FUNCS, part['type'])
-	if resolve_funcs ~= nil then
-		for _, resolve_func in ipairs(resolve_funcs) do
-			part = resolve_func(part)
+		local resolve_funcs = elem_multidict_lookup(RESOLVE_FUNCS, part['type'])
+		if resolve_funcs ~= nil then
+			for _, resolve_func in ipairs(resolve_funcs) do
+				part = resolve_func(part)
+			end
 		end
-	end
 
-	local bounds_checks = elem_multidict_lookup(BOUNDS_CHECKS, part['type'])
-	if bounds_checks ~= nil then
-		for _, bounds_check in ipairs(bounds_checks) do
-			do_bounds_check(part, bounds_check)
+		local bounds_checks = elem_multidict_lookup(BOUNDS_CHECKS, part['type'])
+		if bounds_checks ~= nil then
+			for _, bounds_check in ipairs(bounds_checks) do
+				do_bounds_check(part, bounds_check)
+			end
 		end
-	end
+	end)()
 end
 
 return Particle

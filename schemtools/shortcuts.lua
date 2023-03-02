@@ -56,7 +56,6 @@ function Shortcuts.init(designer)
 		'plot',
 		'get_dtec_dist',
 		'pconfig',
-		'soft_assert',
 	}
 	for _, method in ipairs(designer_methods_to_expose) do
 		expose_designer_method(method)

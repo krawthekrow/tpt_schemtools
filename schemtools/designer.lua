@@ -110,10 +110,6 @@ function Designer:top()
 	return self.stack[#self.stack]
 end
 
-function Designer:soft_assert(pred, msg)
-	Util.soft_assert(pred, msg)
-end
-
 function Designer:autogen_name(tag)
 	local name = '__autogen_' .. tag .. '_' .. self.autogen_name_cnt
 	self.autogen_name_cnt = self.autogen_name_cnt + 1

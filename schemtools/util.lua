@@ -65,17 +65,6 @@ function Util.dump_var(x, custom_dump)
 	print(dump_var_inner(x, ''))
 end
 
-function Util.soft_assert(pred, msg)
-	if not pred then
-		if msg == nil then
-			print('soft assert failed')
-		else
-			print('soft assert failed: ' .. msg)
-		end
-		print(debug.traceback())
-	end
-end
-
 function Util.str_split(str, delimiter)
   local result = {}
   local from = 1
