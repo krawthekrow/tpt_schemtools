@@ -721,7 +721,7 @@ local function make_pixcol_propagator()
 		n=NUM_HORZ_PROP_STAGES, from=aapom_id_grabbers_n, dy=1,
 		f=function(i)
 			chain{dx=-1, f=function()
-				port{v='apom_cray_id_holder_staging_' .. i}
+				port{iv='apom_cray_id_holder_staging'}
 				adv{}
 
 				local dray_spec = exponential_dray_extras[i]
@@ -734,10 +734,10 @@ local function make_pixcol_propagator()
 				cray{v='horz_prop_dray_id_grabber_' .. i, done=0}
 				-- Transfer the CRAY ID to its staging location.
 				cray{v='apom_cray_id_grabber_' .. i, done=0}
-				cray{ct='insl', to=v('apom_cray_id_holder_staging_' .. i)}
+				cray{ct='insl', to=iv('apom_cray_id_holder_staging')}
 
 				aport{v='apom_left_sparkers'}
-				port{v='apom_left_sparker_' .. i}
+				port{iv='apom_left_sparker'}
 				conv{from='sprk', to='insl', ox=1}
 				adv{}
 
@@ -746,9 +746,9 @@ local function make_pixcol_propagator()
 
 				adv{}
 
-				dray{r=2, toe=v('apom_left_sparker_' .. i), done=0}
-				dray{r=2, v='apom_right_sparker_1_' .. i, done=0}
-				dray{r=2, v='apom_right_sparker_2_' .. i}
+				dray{r=2, toe=iv('apom_left_sparker'), done=0}
+				dray{r=2, toe=ivv('apom_right_sparker_1'), done=0}
+				dray{r=2, toe=ivv('apom_right_sparker_2')}
 
 				aport{v='apom_left_sparker_seed_prop_sparkers'}
 				inwr{sprk=1, done=0}
@@ -774,11 +774,11 @@ local function make_pixcol_propagator()
 				-- Push the DRAY propagator ID onto the free stack.
 				cray{to=v('vert_prop_dray_target_' .. i), done=0}
 				-- Transfer the CRAY ID to the CRAY.
-				cray{to=v('apom_cray_id_holder_staging_' .. i), done=0}
+				cray{to=iv('apom_cray_id_holder_staging'), done=0}
 				dray{to=cray_target}
 
 				aport{v='apom_right_sparkers_1'}
-				pconfig{part=v('apom_right_sparker_1_' .. i), toe=getcurs()}
+				port{iv='apom_right_sparker_1'}
 				conv{from='sprk', to='insl', ox=-1}
 
 				-- The horizontal propagation DRAYs must update before the CRAY.
@@ -828,7 +828,7 @@ local function make_pixcol_propagator()
 				dray{r=2, to=v('vert_prop_dray_target_' .. i):e()}
 
 				aport{v='apom_right_sparkers_2'}
-				pconfig{part=v('apom_right_sparker_2_' .. i), toe=getcurs()}
+				port{iv='apom_right_sparker_2'}
 				conv{from='sprk', to='insl', ox=-1}
 			end}
 		end
