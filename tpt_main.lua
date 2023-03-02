@@ -61,17 +61,6 @@ local function require_with_path(path, mod_name)
 	return module
 end
 
-local function wrap_with_xpcall(func, after_err)
-	local function onerr(err)
-		print(debug.traceback(err, 2))
-		after_err()
-	end
-	return function(...)
-		local ok, ret = xpcall(func, onerr, ...)
-		return ret
-	end
-end
-
 function SchemTools:register_trigger(opts)
 	if opts.key == nil then opts.key = DEFAULT_RELOAD_KEY end
 	if opts.cmt_key == nil then opts.cmt_key = DEFAULT_CMT_KEY end
@@ -87,6 +76,18 @@ function SchemTools:register_trigger(opts)
 		opts.schemtools_path = DEFAULT_SCHEMTOOLS_PATH
 	end
 	opts.schemtools_path = sanitize_path(opts.schemtools_path)
+
+	local function wrap_with_xpcall(func, after_err)
+		local function onerr(err)
+			print(err)
+			self.Main.Util.custom_traceback(2)
+			after_err()
+		end
+		return function(...)
+			local ok, ret = xpcall(func, onerr, ...)
+			return ret
+		end
+	end
 
 	local designer = nil
 	local graphics = nil

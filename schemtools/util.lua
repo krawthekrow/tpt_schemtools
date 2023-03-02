@@ -110,6 +110,26 @@ function Util.tbl_keys(tbl)
 	return keys
 end
 
+function Util.custom_traceback(start_depth)
+	print('debug traceback:')
+	local depth = 1
+	while true do
+		local info = debug.getinfo(start_depth + depth, 'Sln')
+		if info == nil then
+			break
+		end
+		local source = info.short_src
+		local name = info.name
+		local line = info.currentline
+		local output_line = '    ' .. source .. ':' .. line
+		if name ~= nil then
+			output_line = output_line .. ': in function ' .. name
+		end
+		print(output_line)
+		depth = depth + 1
+	end
+end
+
 -- tpt specific
 
 Util.ELEM_PREFIX = 'DEFAULT_PT_'
