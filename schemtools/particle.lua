@@ -204,7 +204,19 @@ local function calc_dtec_dist(from, to)
 end
 
 local function resolve_to_square(opts)
-	if opts.to ~= nil then opts.r = calc_dtec_dist(opts.from, opts.to) end
+	if opts.to ~= nil then
+		if getmetatable(opts.to) == Rect then
+			local dist = 0
+			dist = math.max(dist, calc_dtec_dist(opts.from, opts.to:nw(0)))
+			dist = math.max(dist, calc_dtec_dist(opts.from, opts.to:ne(0)))
+			dist = math.max(dist, calc_dtec_dist(opts.from, opts.to:sw(0)))
+			dist = math.max(dist, calc_dtec_dist(opts.from, opts.to:se(0)))
+			opts.r = dist
+		else
+			assert(getmetatable(opts.to) == Point)
+			opts.r = calc_dtec_dist(opts.from, opts.to)
+		end
+	end
 	return opts
 end
 
