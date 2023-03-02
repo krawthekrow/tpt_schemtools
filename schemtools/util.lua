@@ -130,6 +130,18 @@ function Util.custom_traceback(start_depth)
 	end
 end
 
+function Util.wrap_with_xpcall(func, after_err)
+	local function onerr(err)
+		print(err)
+		Util.custom_traceback(2)
+		after_err()
+	end
+	return function(...)
+		local ok, ret = xpcall(func, onerr, ...)
+		return ret
+	end
+end
+
 -- tpt specific
 
 Util.ELEM_PREFIX = 'DEFAULT_PT_'

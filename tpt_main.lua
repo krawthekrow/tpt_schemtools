@@ -103,6 +103,8 @@ function SchemTools:register_trigger(opts)
 	end
 	reload_tools()
 
+	local wrap_with_xpcall = self.Main.Util.wrap_with_xpcall
+
 	local function trigger_reload()
 		if opts.reload_tools then
 			reload_tools()
