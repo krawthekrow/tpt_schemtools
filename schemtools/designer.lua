@@ -393,8 +393,7 @@ function Designer:get_orth_dir(from, to)
 	return dp
 end
 
-function Designer:resolve_parts()
-	local schem = self:top()
+function Designer:resolve_parts(schem)
 	for _, part in ipairs(schem.unresolved_parts) do
 		part:resolve()
 	end
@@ -443,7 +442,7 @@ function Designer:place_schem(child_schem, opts)
 	local schem = self:top()
 	self:push_curs(Point:new(0, 0))
 
-	self:resolve_parts()
+	self:resolve_parts(child_schem)
 
 	-- Amount to shift schematic by, if necessary.
 	local shift_p = Point:new(0, 0)
@@ -591,10 +590,10 @@ end
 function Designer:plot_schem(opts)
 	opts = self:opts_pos(opts)
 
-	self:resolve_parts()
+	local schem = self:top()
+	self:resolve_parts(schem)
 	reload_particle_order()
 
-	local schem = self:top()
 	schem:for_each_part(function(p, part)
 		p = p:add(opts.p)
 		if p.x < 0 or p.y < 0 then
