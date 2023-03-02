@@ -1,6 +1,7 @@
 local Util = require('schemtools/util')
 local Options = require('schemtools/options')
 local Geom = require('schemtools/geom')
+local VirtualExpression = require('schemtools/vexpr')
 local Point = Geom.Point
 local Rect = Geom.Rect
 
@@ -410,6 +411,18 @@ local function do_bounds_check(part, bounds_check)
 		prop .. ' must be at least ' .. bound ..
 		' but ' .. val .. ' requested'
 	)
+end
+
+function Particle:resolve_vvars(vars)
+	local extra_opts = elem_multidict_lookup(EXTRA_OPTS, self['type'])
+	if extra_opts ~= nil then
+		for _, extra_opt in ipairs(extra_opts) do
+			local opt_val = self[extra_opt]
+			if getmetatable(opt_val) == VirtualExpression then
+				self[extra_opt] = opt_val:resolve(vars)
+			end
+		end
+	end
 end
 
 function Particle:resolve()

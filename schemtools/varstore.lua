@@ -1,6 +1,7 @@
 local Util = require('schemtools/util')
 local Geom = require('schemtools/geom')
 local Port = require('schemtools/port')
+local VirtualExpression = require('schemtools/vexpr')
 local Point = Geom.Point
 local Rect = Geom.Rect
 
@@ -12,6 +13,9 @@ function VariableStore:new()
 		-- index suffix to be appended when referencing indexed vars
 		index_stack = {},
 		vars = {},
+		-- virtual variables, used to refer to ports that may be only
+		-- defined in the future
+		vvars = {},
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -89,6 +93,18 @@ end
 
 function VariableStore:get_indexed_var(name)
 	return self:get_var(self:apply_index(name))
+end
+
+function VariableStore:make_vvar(name)
+	local existing_vvar = self.vvars[name]
+	if existing_vvar ~= nil then return existing_vvar end
+	local vexpr = VirtualExpression:from_name(name)
+	self.vvars[name] = vexpr.args[0]
+	return vexpr
+end
+
+function VariableStore:make_indexed_vvar(name)
+	return self:make_vvar(self:apply_index(name))
 end
 
 function VariableStore:translate(shift_p, translators)

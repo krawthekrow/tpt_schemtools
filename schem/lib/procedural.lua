@@ -6,13 +6,16 @@ function shr_1(opts)
 
 	array{n=core_num_rows, dy=1, f=function(i)
 		chain{dx=1, f=function()
+			local shift_amt = shl(1, i-1)
+
 			aport{v='core_block'}
 			filt{mode='set', ct=shl(1, i-1)}
-			aport{v='arow'}
+
+			aport{v='acol'}
 			filt{mode='and'}
+
 			inwr{}
 
-			-- fill in the DTEC later
 			if i == core_num_rows then
 				port{v='res_out'}
 			end
@@ -23,23 +26,25 @@ function shr_1(opts)
 					'is not annihilated.'
 				}
 			end
-			port{iv='dtec_loc'}; inwr{}
+			dtec{to=vv('braycol'), done=0}; inwr{}
+
 			filt{mode='set'}
 
 			inwr{}
-			local shift_amt = shl(1, i-1)
+
 			filt{mode='or', ct=shr(ka, shift_amt)}
+
 			filt{mode='<<<', ct=bor(ka, shl(1, shift_amt))}
-			if i == 1 then port{oy=-1, v='brayrow_n'} end
+
+			aport{v='braycol'}
 			adv{}
+
 			aport{v='inslcol'}
 			insl{}
-
-			dtec{p=iv('dtec_loc'), to=v('brayrow_n'), under=1}
 		end}
 	end}
 
-	chain{dy=-1, p=v('arow'):ln(1), f=function()
+	chain{dy=-1, p=v('acol'):ln(1), f=function()
 		filt{}
 		port{v='a_in', f=function(opts)
 			ldtc{to=opts.p, p=v('a_in')}
@@ -52,9 +57,11 @@ function shr_1(opts)
 		filt{mode='set', ct=bor(ka, 1)}
 		inwr{}
 		inwr{}
+
 		aray{done=0}
-		dtec{to=v('brayrow_n'), done=0}
+		dtec{to=v('braycol'), done=0}
 		ssconv{t='inwr'}
+
 		inwr{sprk=1, done=0}
 		conv{from='sprk', to='inwr', ox=-1, oy=2, under=1, done=0}
 		conv{from='sprk', to='inwr', ox=2, oy=1, under=1}

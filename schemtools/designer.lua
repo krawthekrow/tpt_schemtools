@@ -163,6 +163,14 @@ function Designer:pop_index()
 	self:top().varstore:pop_index()
 end
 
+function Designer:make_vvar(name)
+	return self:top().varstore:make_vvar(name)
+end
+
+function Designer:make_indexed_vvar(name)
+	return self:top().varstore:make_indexed_vvar(name)
+end
+
 function Designer:run_with_ctx(ctx, func)
 	if ctx == '' then
 		func()
@@ -395,6 +403,7 @@ end
 
 function Designer:resolve_parts(schem)
 	for _, part in ipairs(schem.unresolved_parts) do
+		part:resolve_vvars(schem.varstore)
 		part:resolve()
 	end
 	schem.unresolved_parts = {}
