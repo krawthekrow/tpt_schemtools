@@ -124,6 +124,8 @@ function SchemTools:register_trigger(opts)
 			end
 			local schematic_func =
 				require_with_path(opts.reload_path, opts.reload_entry)
+			print()
+			print('=============== STARTING NEW RUN ===============')
 			schematic_func(self.Main)
 		end
 	end
