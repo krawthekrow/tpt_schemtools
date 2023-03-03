@@ -413,7 +413,9 @@ function Designer:pconfig(opts)
 	for k, v in pairs(opts.part) do
 		opts[k] = v
 	end
-	opts.from = Point:new(opts.part.x, opts.part.y)
+	if opts.from == nil then
+		opts.from = Point:new(opts.part.x, opts.part.y)
+	end
 	opts.part:config(opts)
 	table.insert(self:top().unresolved_parts, opts.part)
 end
