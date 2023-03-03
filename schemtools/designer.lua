@@ -99,6 +99,9 @@ function Designer:new()
 		port_translators = clone_default_port_translators(),
 		tester = Tester:new(),
 		comments = {},
+		-- Error context to only show one error per run.
+		-- This can be overridden by the harness with its own context.
+		err_ctx = Util.make_err_ctx(),
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -302,7 +305,7 @@ end
 
 function Designer:make_schem(func)
 	self:begin_schem()
-	func()
+	Util.wrap_with_xpcall(func, {err_ctx = self.err_ctx})()
 	return self:end_schem()
 end
 
@@ -401,10 +404,16 @@ function Designer:get_orth_dir(from, to)
 	return dp
 end
 
+function Designer:resolve_part_safe(part)
+	Util.wrap_with_xpcall(function()
+		part:resolve()
+	end, {err_ctx = self.err_ctx})()
+end
+
 function Designer:resolve_parts(schem)
 	for _, part in ipairs(schem.unresolved_parts) do
 		part:resolve_vvars(schem.varstore)
-		part:resolve()
+		self:resolve_part_safe(part)
 	end
 	schem.unresolved_parts = {}
 end
@@ -429,7 +438,11 @@ function Designer:part(opts)
 	end
 
 	local part = Particle:from_opts(opts)
-	table.insert(self:top().unresolved_parts, part)
+	if part:has_vvars() then
+		table.insert(self:top().unresolved_parts, part)
+	else
+		self:resolve_part_safe(part)
+	end
 
 	if opts.v ~= nil then self:set_var(opts.v, part) end
 
@@ -673,7 +686,7 @@ function Designer:plot(opts)
 		self:clear(opts.clear)
 	end
 	self:plot_schem(opts)
-	if opts.run_test then
+	if opts.run_test and not self.err_ctx.found_err then
 		self.tester:start()
 	end
 end

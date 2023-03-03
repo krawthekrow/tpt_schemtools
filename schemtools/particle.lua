@@ -393,6 +393,15 @@ function Particle:from_opts(opts)
 	return part
 end
 
+function Particle:has_vvars()
+	for k, v in pairs(self) do
+		if getmetatable(v) == VirtualExpression then
+			return true
+		end
+	end
+	return false
+end
+
 local function do_bounds_check(part, bounds_check)
 	local typ = bounds_check.typ
 	local prop = bounds_check.prop
@@ -426,23 +435,21 @@ function Particle:resolve_vvars(vars)
 end
 
 function Particle:resolve()
-	Util.wrap_with_xpcall(function()
-		local part = self
+	local part = self
 
-		local resolve_funcs = elem_multidict_lookup(RESOLVE_FUNCS, part['type'])
-		if resolve_funcs ~= nil then
-			for _, resolve_func in ipairs(resolve_funcs) do
-				part = resolve_func(part)
-			end
+	local resolve_funcs = elem_multidict_lookup(RESOLVE_FUNCS, part['type'])
+	if resolve_funcs ~= nil then
+		for _, resolve_func in ipairs(resolve_funcs) do
+			part = resolve_func(part)
 		end
+	end
 
-		local bounds_checks = elem_multidict_lookup(BOUNDS_CHECKS, part['type'])
-		if bounds_checks ~= nil then
-			for _, bounds_check in ipairs(bounds_checks) do
-				do_bounds_check(part, bounds_check)
-			end
+	local bounds_checks = elem_multidict_lookup(BOUNDS_CHECKS, part['type'])
+	if bounds_checks ~= nil then
+		for _, bounds_check in ipairs(bounds_checks) do
+			do_bounds_check(part, bounds_check)
 		end
-	end)()
+	end
 end
 
 return Particle

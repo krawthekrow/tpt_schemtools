@@ -77,18 +77,6 @@ function SchemTools:register_trigger(opts)
 	end
 	opts.schemtools_path = sanitize_path(opts.schemtools_path)
 
-	local function wrap_with_xpcall(func, after_err)
-		local function onerr(err)
-			print(err)
-			self.Main.Util.custom_traceback(2)
-			after_err()
-		end
-		return function(...)
-			local ok, ret = xpcall(func, onerr, ...)
-			return ret
-		end
-	end
-
 	local designer = nil
 	local graphics = nil
 	local function reload_tools()
@@ -103,13 +91,17 @@ function SchemTools:register_trigger(opts)
 	end
 	reload_tools()
 
-	local wrap_with_xpcall = self.Main.Util.wrap_with_xpcall
+	local function wrap_with_xpcall(...)
+		return self.Main.Util.wrap_with_xpcall(...)
+	end
+	local err_ctx = self.Main.Util.make_err_ctx()
 
 	local function trigger_reload()
 		if opts.reload_tools then
 			reload_tools()
 		end
 		designer = self.Main.Designer:new()
+		designer.err_ctx = err_ctx
 		graphics = self.Main.Graphics:new()
 		graphics.designer = designer
 		graphics.cmt_key = opts.cmt_key
@@ -126,7 +118,8 @@ function SchemTools:register_trigger(opts)
 				require_with_path(opts.reload_path, opts.reload_entry)
 			print()
 			print('=============== STARTING NEW RUN ===============')
-			schematic_func(self.Main)
+			self.Main.Util.clear_err_ctx(err_ctx)
+			wrap_with_xpcall(schematic_func, {err_ctx = err_ctx})(self.Main)
 		end
 	end
 
@@ -155,11 +148,13 @@ function SchemTools:register_trigger(opts)
 			designer.tester:on_tick()
 		end
 	end
-	event.register(event.tick, wrap_with_xpcall(on_tick, function()
-		if designer ~= nil then
-			designer.tester:stop()
+	event.register(event.tick, wrap_with_xpcall(on_tick, {
+		after_err=function()
+			if designer ~= nil then
+				designer.tester:stop()
+			end
 		end
-	end))
+	}))
 
 	-- Graphics
 

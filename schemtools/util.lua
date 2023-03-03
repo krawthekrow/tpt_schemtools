@@ -100,7 +100,7 @@ function Util.tbl_keys(tbl)
 end
 
 function Util.custom_traceback(start_depth)
-	print('debug traceback:')
+	local traceback = 'debug traceback:\n'
 	local depth = 1
 	while true do
 		local info = debug.getinfo(start_depth + depth, 'Sln')
@@ -114,16 +114,32 @@ function Util.custom_traceback(start_depth)
 		if name ~= nil then
 			output_line = output_line .. ': in function ' .. name
 		end
-		print(output_line)
+		traceback = traceback .. output_line .. '\n'
 		depth = depth + 1
 	end
+	return traceback
 end
 
-function Util.wrap_with_xpcall(func, after_err)
+function Util.make_err_ctx()
+	return {found_err = false}
+end
+function Util.clear_err_ctx(err_ctx)
+	err_ctx.found_err = false
+end
+
+function Util.wrap_with_xpcall(func, opts)
+	if opts == nil then opts = {} end
 	local function onerr(err)
-		print(err)
-		Util.custom_traceback(2)
-		after_err()
+		if not (opts.err_ctx ~= nil and opts.err_ctx.found_err) then
+			print(err)
+			print(Util.custom_traceback(2))
+			if opts.err_ctx ~= nil then
+				opts.err_ctx.found_err = true
+			end
+		end
+		if opts.after_err ~= nil then
+			opts.after_err()
+		end
 	end
 	return function(...)
 		local ok, ret = xpcall(func, onerr, ...)
