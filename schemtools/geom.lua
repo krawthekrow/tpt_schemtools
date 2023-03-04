@@ -198,6 +198,45 @@ function Rect:sub(p)
 	return Rect:new(self.lb:sub(p), self.ub:sub(p))
 end
 
+function Rect:slice(opts)
+	local lbx, lby, ubx, uby = self.lb.x, self.lb.y, self.ub.x, self.ub.y
+	if opts.x ~= nil then
+		if opts.x >= 0 then
+			lbx = self.lb.x + opts.x - 1
+			ubx = self.lb.x + opts.x - 1
+		else
+			lbx = self.ub.x + opts.x + 1
+			ubx = self.ub.x + opts.x + 1
+		end
+	end
+	if opts.y ~= nil then
+		if opts.y >= 0 then
+			lby = self.lb.y + opts.y - 1
+			uby = self.lb.y + opts.y - 1
+		else
+			lby = self.ub.y + opts.y + 1
+			uby = self.ub.y + opts.y + 1
+		end
+	end
+	return Rect:new(Point:new(lbx, lby), Point:new(ubx, uby))
+end
+
+function Rect:pad(opts)
+	local lbx, lby, ubx, uby = self.lb.x, self.lb.y, self.ub.x, self.ub.y
+	if opts.n ~= nil then lby = lby - 1 end
+	if opts.e ~= nil then ubx = ubx + 1 end
+	if opts.s ~= nil then uby = uby + 1 end
+	if opts.w ~= nil then lbx = lbx - 1 end
+	return Rect:new(Point:new(lbx, lby), Point:new(ubx, uby))
+end
+
+function Rect:shift(opts)
+	if opts.x == nil then opts.x = 0 end
+	if opts.y == nil then opts.y = 0 end
+	if opts.p == nil then opts.p = Point:new(opts.x, opts.y) end
+	return self:add(opts.p)
+end
+
 Geom.Constraints = {}
 
 Geom.Constraints.Ray = {}
