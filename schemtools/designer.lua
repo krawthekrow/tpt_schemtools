@@ -598,7 +598,17 @@ function Designer:test_setup(opts)
 			assert(opts.v ~= nil)
 			opts.p = self:get_var(opts.v)
 		end
+		if getmetatable(opts.p) == Rect then
+			opts.p = opts.p:nw(0)
+		end
 		return opts
+	end
+
+	if opts.model ~= nil then
+		self.tester.model = opts.model
+	end
+	if opts.dump_func ~= nil then
+		self.tester.dump_func = opts.dump_func
 	end
 
 	for _, spec in pairs(opts.inputs) do
@@ -607,6 +617,7 @@ function Designer:test_setup(opts)
 	for _, spec in pairs(opts.outputs) do
 		self.tester:add_output(opts_io(spec))
 	end
+
 	for _, tc in pairs(opts.tcs) do
 		self.tester:test_case(tc)
 	end
@@ -698,6 +709,9 @@ function Designer:plot(opts)
 	end
 	self:plot_schem(opts)
 	if opts.run_test and not self.err_ctx.found_err then
+		if opts.stop_at ~= nil then
+			self.tester.stop_at = opts.stop_at
+		end
 		self.tester:start()
 	end
 end

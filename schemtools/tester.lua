@@ -9,6 +9,10 @@ function Tester:new()
 		keyframes = {},
 		cursor = 1,
 		subcursor = 1,
+		model = nil,
+		num_ticks = 0,
+		stop_at = nil,
+		dump_func = nil,
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -59,6 +63,19 @@ end
 function Tester:test_case(opts)
 	if opts.lat ~= nil then opts.delay = opts.lat end
 	if opts.delay == nil then opts.delay = 1 end
+
+	if self.model ~= nil then
+		local outputs = nil
+		if type(self.model) == 'function' then
+			outputs = self.model(opts)
+		else
+			outputs = self.model:tick(opts)
+		end
+		for k, v in pairs(outputs) do
+			opts[k] = v
+		end
+	end
+
 	if self.cursor > #self.keyframes then
 		table.insert(self.keyframes, {})
 	end
@@ -82,10 +99,15 @@ end
 -- the below functions are called at testing time
 
 function Tester:start()
+	if #self.keyframes == 0 then
+		print('no test data supplied')
+		return
+	end
 	self.cursor = 1
 	self.subcursor = 1
 	self.active = true
 	tpt.set_pause(0)
+	self:on_tick()
 end
 
 function Tester:stop()
@@ -93,13 +115,26 @@ function Tester:stop()
 	tpt.set_pause(1)
 end
 
+local function compare_test_output(val, expected_val)
+	if type(val) == 'table' then
+		for k, v in pairs(expected_val) do
+			if not compare_test_output(v, val[k]) then
+				return false
+			end
+		end
+		for k, _ in pairs(val) do
+			if expected_val[k] == nil then
+				return false
+			end
+		end
+		return true
+	end
+	return val == expected_val
+end
+
 function Tester:on_tick()
 	if not self.active then return end
-	if self.cursor > #self.keyframes then
-		print('test complete!')
-		self:stop()
-		return
-	end
+
 	local keyframe = self.keyframes[self.cursor]
 	local delay = 1
 	if keyframe.delay ~= nil then delay = keyframe.delay end
@@ -109,14 +144,30 @@ function Tester:on_tick()
 			local input, output = self.inputs[k], self.outputs[k]
 			if output ~= nil then
 				local val = output.get_func(output.p, keyframe)
-				if val ~= v and keyframe.debug_info ~= nil then
-					print('failure debug info:')
-					Util.dump_var(keyframe.debug_info)
+				if
+					not compare_test_output(val, v) and
+					keyframe.debug_info ~= nil
+				then
+					if self.dump_func == nil then
+						print('failure debug info:')
+						Util.dump_var(keyframe.debug_info)
+						print('actual output: ' .. val)
+						Util.dump_var(val)
+						print('spec output:' .. v)
+						Util.dump_var(v)
+					else
+						self.dump_func(
+							self.num_ticks,
+							keyframe.debug_info,
+							val, v
+						)
+					end
+					assert(
+						false,
+						'actual output does not match spec output at tick ' ..
+						self.num_ticks
+					)
 				end
-				assert(
-					val == v,
-					'actual output ' .. val .. ' does not match spec output ' .. v
-				)
 			end
 			if input ~= nil then
 				input.set_func(input.p, v, keyframe)
@@ -128,6 +179,19 @@ function Tester:on_tick()
 	if self.subcursor > delay then
 		self:advance_curs()
 	end
+
+	if self.cursor > #self.keyframes then
+		print('test complete!')
+		self:stop()
+		return
+	end
+
+	if self.stop_at ~= nil and self.num_ticks == self.stop_at then
+		print('stopping early at tick ' .. tostring(self.num_ticks))
+		self:stop()
+		return
+	end
+	self.num_ticks = self.num_ticks + 1
 end
 
 return Tester
