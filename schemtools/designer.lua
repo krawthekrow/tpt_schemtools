@@ -303,8 +303,13 @@ function Designer:end_schem()
 	return table.remove(self.stack)
 end
 
-function Designer:make_schem(func)
+function Designer:make_schem(func, opts)
+	local self_varstore = self:top().varstore
+	local self_ctx_prefix = self_varstore:top_ctx_prefix()
 	self:begin_schem()
+	if opts.mount ~= nil then
+		self:top().varstore:mount(opts.mount, self_varstore, self_ctx_prefix)
+	end
 	Util.wrap_with_xpcall(func, {err_ctx = self.err_ctx})()
 	return self:end_schem()
 end
@@ -511,7 +516,7 @@ function Designer:instantiate_schem(func, opts)
 			func(unpack(opts.args))
 		end
 	end
-	local schem = self:make_schem(call_func_with_args)
+	local schem = self:make_schem(call_func_with_args, opts)
 	self:place_schem(schem, opts)
 end
 

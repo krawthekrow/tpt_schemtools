@@ -5,6 +5,18 @@ local VirtualExpression = require('schemtools/vexpr')
 local Point = Geom.Point
 local Rect = Geom.Rect
 
+-- allows existing var paths to be mounted into schematics
+local MountPoint = {}
+function MountPoint:new(target, target_ctx_prefix)
+	local o = {
+		target = target,
+		target_ctx_prefix = target_ctx_prefix,
+	}
+	setmetatable(o, self)
+	self.__index = self
+	return o
+end
+
 local VariableStore = {}
 function VariableStore:new()
 	local o = {
@@ -25,6 +37,12 @@ end
 function VariableStore:top_ctx()
 	if #self.ctx_stack == 0 then return nil end
 	return self.ctx_stack[#self.ctx_stack]
+end
+
+function VariableStore:top_ctx_prefix()
+	local ctx = self:top_ctx()
+	if ctx == nil then return '' end
+	return ctx .. '.'
 end
 
 function VariableStore:begin_ctx(ctx)
@@ -55,9 +73,28 @@ function VariableStore:pop_index()
 end
 
 function VariableStore:expand_var_name(name)
-	local ctx = self:top_ctx()
-	if ctx == nil then return name end
-	return ctx .. '.' .. name
+	return self:top_ctx_prefix() .. name
+end
+
+function VariableStore:get_var_with_mounts(name)
+	local val = self.vars[name]
+	if val ~= nil then
+		return val
+	end
+
+	local ptr = 1
+	while true do
+		local match_s, _ = name:find('.', ptr, true)
+		if match_s == nil then
+			return nil
+		end
+		ptr = match_s + 1
+		local mount_match = self.vars[name:sub(1, match_s - 1)]
+		if mount_match ~= nil then
+			name = mount_match.target_ctx_prefix .. name:sub(match_s + 1)
+			return mount_match.target:get_var_with_mounts(name)
+		end
+	end
 end
 
 function VariableStore:set_var(name, val)
@@ -76,7 +113,7 @@ end
 
 function VariableStore:get_var_raw(name)
 	name = self:expand_var_name(name)
-	return self.vars[name]
+	return self:get_var_with_mounts(name)
 end
 
 function VariableStore:get_var(name)
@@ -107,6 +144,10 @@ function VariableStore:make_indexed_vvar(name)
 	return self:make_vvar(self:apply_index(name))
 end
 
+function VariableStore:mount(src, dest, dest_ctx_prefix)
+	self:set_var(src, MountPoint:new(dest, dest_ctx_prefix))
+end
+
 function VariableStore:translate(shift_p, translators)
 	for name, val in pairs(self.vars) do
 		local translation_func = translators[getmetatable(val)]
@@ -131,6 +172,10 @@ end
 function VariableStore:merge(other_store)
 	for name, val in pairs(other_store.vars) do
 		name = self:expand_var_name(name)
+		if getmetatable(val) == MountPoint and val.target == other_store then
+			val.target = self
+			val.target_ctx_prefix = self:expand_var_name(val.target_ctx_prefix)
+		end
 		self.vars[name] = val
 	end
 end
