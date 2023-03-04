@@ -124,7 +124,7 @@ function Shortcuts.init(designer)
 			-- allow striding
 			local dplen = designer:get_orth_dist(Point.ZERO, opts.dp)
 			if dplen ~= 0 then
-				opts.n = Util.floordiv(opts.n, dplen)
+				opts.n = Util.ceildiv(opts.n, dplen)
 			end
 		end
 		local func = opts.f
