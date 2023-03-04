@@ -310,7 +310,7 @@ function Designer:make_schem(func, opts)
 	if opts.mount ~= nil then
 		self:top().varstore:mount(opts.mount, self_varstore, self_ctx_prefix)
 	end
-	Util.wrap_with_xpcall(func, {err_ctx = self.err_ctx})()
+	self:wrap_with_xpcall(func)()
 	return self:end_schem()
 end
 
@@ -409,16 +409,16 @@ function Designer:get_orth_dir(from, to)
 	return dp
 end
 
-function Designer:resolve_part_safe(part)
-	Util.wrap_with_xpcall(function()
-		part:resolve()
-	end, {err_ctx = self.err_ctx})()
+function Designer:wrap_with_xpcall(func)
+	return Util.wrap_with_xpcall(func, {err_ctx = self.err_ctx})
 end
 
 function Designer:resolve_parts(schem)
 	for _, part in ipairs(schem.unresolved_parts) do
-		part:resolve_vvars(schem.varstore)
-		self:resolve_part_safe(part)
+		self:wrap_with_xpcall(function()
+			part:resolve_vvars(schem.varstore)
+			part:resolve()
+		end)()
 	end
 	schem.unresolved_parts = {}
 end
@@ -430,7 +430,9 @@ function Designer:pconfig(opts)
 	if opts.from == nil then
 		opts.from = Point:new(opts.part.x, opts.part.y)
 	end
-	opts.part:config(opts)
+	self:wrap_with_xpcall(function()
+		opts.part:config(opts)
+	end)()
 	table.insert(self:top().unresolved_parts, opts.part)
 end
 
@@ -442,17 +444,21 @@ function Designer:part(opts)
 		opts.v = self:apply_index(opts.iv)
 	end
 
-	local part = Particle:from_opts(opts)
-	if part:has_vvars() then
-		table.insert(self:top().unresolved_parts, part)
-	else
-		self:resolve_part_safe(part)
-	end
+	local part = nil
 
-	if opts.v ~= nil then self:set_var(opts.v, part) end
+	self:wrap_with_xpcall(function()
+		part = Particle:from_opts(opts)
+		if part:has_vvars() then
+			table.insert(self:top().unresolved_parts, part)
+		else
+			part:resolve()
+		end
 
-	local schem = self:top()
-	schem:place_parts(opts.p, {part}, opts.under)
+		if opts.v ~= nil then self:set_var(opts.v, part) end
+
+		local schem = self:top()
+		schem:place_parts(opts.p, {part}, opts.under)
+	end)()
 
 	if opts.done then
 		self:advance_curs()
