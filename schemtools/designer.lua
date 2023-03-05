@@ -307,8 +307,17 @@ function Designer:make_schem(func, opts)
 	local self_varstore = self:top().varstore
 	local self_ctx_prefix = self_varstore:top_ctx_prefix()
 	self:begin_schem()
+	if opts.mount_self ~= nil then
+		self:top().varstore:mount(
+			opts.mount_self, self_varstore, self_ctx_prefix
+		)
+	end
 	if opts.mount ~= nil then
-		self:top().varstore:mount(opts.mount, self_varstore, self_ctx_prefix)
+		for k, v in pairs(opts.mount) do
+			self:top().varstore:mount(
+				k, self_varstore, self_varstore:expand_var_name(v) .. '.'
+			)
+		end
 	end
 	self:wrap_with_xpcall(func)()
 	return self:end_schem()
