@@ -556,6 +556,21 @@ function Designer:solve_constraints(opts)
 		local inclusive_suffix = 'i'
 		local is_inclusive = k:sub(-#inclusive_suffix) == inclusive_suffix
 		if is_inclusive then k = k:sub(1, -#inclusive_suffix - 1) end
+
+		if getmetatable(v) == Rect then
+			if k == 'n' then v = v:n(0)
+			elseif k == 'e' then v = v:e(0)
+			elseif k == 's' then v = v:s(0)
+			elseif k == 'w' then v = v:w(0)
+			elseif k == 'ne' then v = v:ne(0)
+			elseif k == 'se' then v = v:se(0)
+			elseif k == 'sw' then v = v:sw(0)
+			elseif k == 'nw' then v = v:nw(0)
+			elseif k == 'ns' then v = v:n(0)
+			elseif k == 'ew' then v = v:w(0)
+			end
+		end
+
 		local dir = ray_dirs[k]
 		if dir ~= nil then
 			if is_inclusive then v = v:sub(dir) end
