@@ -145,6 +145,112 @@ function DispCoreModel:tick(inputs)
 	return {pixels_out = pixels_out}
 end
 
+local function disp56_pixcol_in(p, val)
+	sim.partKill(p.x, p.y)
+	local id = sim.partCreate(-3, p.x, p.y, elem.DEFAULT_PT_INWR)
+	sim.partProperty(id, sim.FIELD_DCOLOUR, bor(0xFF000000, val))
+end
+
+local function disp56_pixcols_in(p, val)
+	for i = 1, 56 do
+		for j = 1, 56 do
+			local subp = p:add(get_disp_core_matrix_offset(j, i))
+			disp56_pixcol_in(subp, val)
+		end
+	end
+end
+
+local function disp56_pixels_out(p)
+	local data = {}
+	for i = 1, 56 do
+		for j = 1, 56 do
+			local subp = p:add(get_disp_core_matrix_offset(j, i))
+			local id1 = sim.partID(subp.x, subp.y)
+			local id2 = sim.partID(subp.x, subp.y + 1)
+			local color1 = sim.partProperty(id1, sim.FIELD_DCOLOUR)
+			local color2 = sim.partProperty(id2, sim.FIELD_DCOLOUR)
+			table.insert(data, band(color1, 0xFFFFFF))
+			table.insert(data, band(color2, 0xFFFFFF))
+		end
+	end
+	return data
+end
+
+local function gen_disp56_data_in(f)
+	local data_in = {}
+	for i = 1, 56 do
+		local val1, val2 = 0, 0
+		for j = 1, 56 do
+			local data_bit = 0
+			if f(j, i) then data_bit = 1 end
+			local shift_amt = intdiv(j - 1, 2)
+			if j % 2 == 1 then
+				val1 = bor(val1, shl(data_bit, shift_amt))
+			else
+				val2 = bor(val2, shl(data_bit, shift_amt))
+			end
+		end
+		table.insert(data_in, val1)
+		table.insert(data_in, val2)
+	end
+	return data_in
+end
+
+local function make_disp56_render_tests()
+	local seed = os.time()
+	print('using seed ' .. tostring(seed))
+	math.randomseed(seed)
+	local random_x, random_y = math.random(56), math.random(56)
+
+	local test_cases = {
+		-- clear
+		{pixcol_in=0xFFFFFF, data_in=gen_disp56_data_in(function(x, y)
+			return true
+		end)},
+
+		-- square border
+		{pixcol_in=0xFF0000, data_in=gen_disp56_data_in(function(x, y)
+			return x == 1 or x == 56 or y == 1 or y == 56
+		end)},
+
+		-- cross
+		{pixcol_in=0x0000FF, data_in=gen_disp56_data_in(function(x, y)
+			return x - y == 0 or x + y == 57
+		end)},
+
+		-- halves
+		{pixcol_in=0x000033, data_in=gen_disp56_data_in(function(x, y)
+			return x <= 28
+		end)},
+		{pixcol_in=0x000066, data_in=gen_disp56_data_in(function(x, y)
+			return y <= 28
+		end)},
+		{pixcol_in=0x000099, data_in=gen_disp56_data_in(function(x, y)
+			return x > 28
+		end)},
+		{pixcol_in=0x0000CC, data_in=gen_disp56_data_in(function(x, y)
+			return y > 28
+		end)},
+
+		-- random point
+		{pixcol_in=0x0000FF, data_in=gen_disp56_data_in(function(x, y)
+			return x == random_x and y == random_y
+		end)},
+	}
+
+	-- random
+	for i = 1, 16 do
+		table.insert(test_cases, {
+			pixcol_in=math.random(0x1000000) - 1,
+			data_in=gen_disp56_data_in(function(x, y)
+				return math.random(2) == 2
+			end),
+		})
+	end
+
+	return test_cases
+end
+
 function disp56_core_tb()
 	schem{
 		f=disp56_core,
@@ -161,102 +267,26 @@ function disp56_core_tb()
 	}
 	connect{
 		v='core.make_side_unit',
-		p=v('core.ppom_payload'):ne(0):e(10),
+		p=v('core.ppom_payload'):ne(0):e(2),
 	}
 	connect{
-		v='core.make_reset_pscn_sparkers',
-		p=v('core.ppom_payload'):e(10),
+		v='core.reset_pscn_sparkers.make_apom_reset',
+		p=v('core.double_buffer'):s(1),
 	}
 	connect{v='core.data_in_swizzler', p=v('core.data_targets'):n(20)}
 
-	local function pixcol_in(p, val)
-		for i = 1, 56 do
-			for j = 1, 56 do
-				local subp = p:add(get_disp_core_matrix_offset(j, i))
-				sim.partKill(subp.x, subp.y)
-				local id = sim.partCreate(-3, subp.x, subp.y, elem.DEFAULT_PT_INWR)
-				sim.partProperty(id, sim.FIELD_DCOLOUR, val)
-			end
-		end
-	end
-
-	local function pixels_out(p)
-		local data = {}
-		for i = 1, 56 do
-			for j = 1, 56 do
-				local subp = p:add(get_disp_core_matrix_offset(j, i))
-				local id1 = sim.partID(subp.x, subp.y)
-				local id2 = sim.partID(subp.x, subp.y + 1)
-				local color1 = sim.partProperty(id1, sim.FIELD_DCOLOUR)
-				local color2 = sim.partProperty(id2, sim.FIELD_DCOLOUR)
-				table.insert(data, color1)
-				table.insert(data, color2)
-			end
-		end
-		return data
-	end
-
-	local function gen_data_in(f)
-		local data_in = {}
-		for i = 1, 56 do
-			local val1, val2 = 0, 0
-			for j = 1, 56 do
-				local data_bit = 0
-				if f(j, i) then data_bit = 1 end
-				local shift_amt = intdiv(j - 1, 2)
-				if j % 2 == 1 then
-					val1 = bor(val1, shl(data_bit, shift_amt))
-				else
-					val2 = bor(val2, shl(data_bit, shift_amt))
-				end
-			end
-			table.insert(data_in, val1)
-			table.insert(data_in, val2)
-		end
-		return data_in
-	end
-
 	tsetup{
 		inputs={
-			{name='pixcol_in', v='core.pixcol_targets', f=pixcol_in},
+			{name='pixcol_in', v='core.pixcol_targets', f=disp56_pixcols_in},
 			{name='data_in', v='core.data_in', f=filts_in},
 		},
 		outputs={
-			{name='pixels_out', v='core.double_buffer', f=pixels_out},
+			{name='pixels_out', v='core.double_buffer', f=disp56_pixels_out},
 		},
 		model=DispCoreModel:new(),
-		dump_func=function(num_ticks, debug_info, actual, expected)
-		end,
+		dump_debug_info=false,
+		tcs=make_disp56_render_tests(),
 	}
-
-	-- clear
-	tc{pixcol_in=0xFFFFFFFF, data_in=gen_data_in(function(x, y)
-		return true
-	end)}
-
-	-- square border
-	tc{pixcol_in=0xFFFF0000, data_in=gen_data_in(function(x, y)
-		return x == 1 or x == 56 or y == 1 or y == 56
-	end)}
-
-	-- cross
-	tc{pixcol_in=0xFF0000FF, data_in=gen_data_in(function(x, y)
-		return x - y == 0 or x + y == 57
-	end)}
-
-	-- halves
-	tc{pixcol_in=0xFF000033, data_in=gen_data_in(function(x, y)
-		return x <= 28
-	end)}
-	tc{pixcol_in=0xFF000066, data_in=gen_data_in(function(x, y)
-		return y <= 28
-	end)}
-	tc{pixcol_in=0xFF000099, data_in=gen_data_in(function(x, y)
-		return x > 28
-	end)}
-	tc{pixcol_in=0xFF0000CC, data_in=gen_data_in(function(x, y)
-		return y > 28
-	end)}
 
 	plot{clear={}, run_test=1}
 end
@@ -267,5 +297,19 @@ function disp56_tb()
 		v='disp',
 		x=70, y=100,
 	}
-	plot{clear={}, run_test=0}
+
+	tsetup{
+		inputs={
+			{name='pixcol_in', v='disp.pixcol_in', f=disp56_pixcol_in},
+			{name='data_in', v='disp.data_in', f=filts_in},
+		},
+		outputs={
+			{name='pixels_out', v='disp.core.double_buffer', f=disp56_pixels_out},
+		},
+		model=DispCoreModel:new(),
+		dump_debug_info=false,
+		tcs=make_disp56_render_tests(),
+	}
+
+	plot{clear={}, run_test=1}
 end

@@ -69,38 +69,51 @@ local function disp56_core_reset_pscn_sparkers()
 	end}
 
 	-- APOM setup sequence.
-	-- TODO: temporary positions; make into port
-	chain{dy=-1, p=v('cray_target_1'):n(150), f=function()
-		port{v='apom_template'}
-		cray{
-			from=v('cray_target_1'), r=56,
-			s=v('core.reset_pscnrow_1'):e(0):n(LAYER_SHIFT)
-		}
+	port{
+		v='make_apom_setup',
+		p=v('cray_target_1'):n(),
+		f=function(opts)
+			opts_bool(opts, 'omit_pscn')
 
-		assert(
-			v('id_holder_1'):s():eq(v('id_holder_2')),
-			'make these adjacent to save on setup/reset particles'
-		)
-		cray{to=v('id_holders'), done=0}
-		dray{to=v('cray_target_2'), done=0}
-		dray{to=v('cray_target_1')}
+			chain{dy=-1, p=findpt{n=v('cray_target_1'), ew=opts.p}, f=function()
+				port{v='apom_template'}
+				cray{
+					from=v('cray_target_1'), r=56,
+					s=v('core.reset_pscnrow_1'):e(0):n(LAYER_SHIFT)
+				}
 
-		pscn{sprk=1, done=0}
-		ssconv{t='pscn', oy=1}
-	end}
+				assert(
+					v('id_holder_1'):s():eq(v('id_holder_2')),
+					'make these adjacent to save on setup/reset particles'
+				)
+				cray{to=v('id_holders'), done=0}
+				dray{to=v('cray_target_2'), done=0}
+				dray{to=v('cray_target_1')}
+
+				if not opts.omit_pscn then
+					pscn{sprk=1, done=0}
+					ssconv{t='pscn', oy=1}
+				end
+			end}
+		end,
+	}
 
 	-- APOM reset sequence.
-	-- TODO: temporary positions; make into port
-	chain{dy=1, p=v('id_holder_2'):s(120), f=function()
-		adv{}
+	port{
+		v='make_apom_reset',
+		f=function(opts)
+			chain{dy=1, p=findpt{s=v('id_holder_2'), ew=opts.p}, f=function()
+				adv{}
 
-		dray{to=v('cray_target_1'), done=0}
-		dray{to=v('cray_target_2'), done=0}
-		cray{ct='insl', to=v('id_holders')}
+				dray{to=v('cray_target_1'), done=0}
+				dray{to=v('cray_target_2'), done=0}
+				cray{ct='insl', to=v('id_holders')}
 
-		pscn{sprk=1, done=0}
-		ssconv{t='pscn', oy=-1}
-	end}
+				pscn{sprk=1, done=0}
+				ssconv{t='pscn', oy=-1}
+			end}
+		end,
+	}
 end
 
 -- External unit to copy in sparked PSCNs wherever the BRAY gets
@@ -148,7 +161,7 @@ local function disp56_core_sprk_filler()
 				end
 
 				for j = 1, num_seeds do
-					aport{v='core_sparker_seeds_col_' .. j}
+					aport{v='sprk_seeds_col_' .. j}
 					pscn{sprk=1}
 					adv{}
 				end
@@ -182,24 +195,24 @@ local function disp56_core_sprk_filler()
 		end
 	}
 
-	for i = 1, num_seeds do
+	array{n=num_seeds, f=function(i)
 		-- Respark the core sparker seeds. This comes before the
 		-- seed propagation, so we must spark them with life=3 sparks.
 		chain{
-			dy=-1, p=v('core_sparker_seeds_col_' .. i):ln(2), 
+			dy=-1, p=iv('sprk_seeds_col'):ln(2),
 			f=function()
 				-- There is one seed every two spaces, so make sure we
 				-- spark the right number.
 				local num_targets = ceildiv(
-					v('core_sparker_seeds_col_' .. i):sz().y, 2
+					iv('sprk_seeds_col'):sz().y, 2
 				)
 				cray{
 					life=3, r=num_targets,
-					s=v('core_sparker_seeds_col_' .. i):ln(0)
+					s=iv('sprk_seeds_col'):ln(0)
 				}
 
-				cray{ct='insl', to=v('core_sparker_seeds_col_' .. i), done=0}
-				cray{ct='pscn', to=v('core_sparker_seeds_col_' .. i), done=0}
+				cray{ct='insl', to=iv('sprk_seeds_col'), done=0}
+				cray{ct='pscn', to=iv('sprk_seeds_col'), done=0}
 				ssconv{t='pscn', done=0}
 				if i ~= 1 then
 					-- Ensure the resparker CRAYs only touch the particles
@@ -209,20 +222,22 @@ local function disp56_core_sprk_filler()
 					filt{ox=-1, done=0}
 				end
 				-- This will be resparked before the lower CRAY updates.
-				aport{v='core_sparker_seeds_sparkers'}
+				aport{v='sprk_seeds'}
 				inwr{sprk=1}
 
 				pscn{sprk=1}
 			end
 		}
-	end
+	end}
 
 	-- Respark the sparkers.
 	chain{
-		-- TODO: temporary position
-		dx=1, p=v('core_sparker_seeds_sparkers'):le(3),
+		-- Position flexible. Chosen to fit since it works nicely with the
+		-- first row propagation seeds sparker.
+		dx=1, p=v('sprk_seeds'):le(3),
 		f=function()
-			local respark_s = v('core_sparker_seeds_sparkers'):le(0)
+			local respark_s = v('sprk_seeds'):le(0)
+			port{v='sparker_resetter'}
 			-- Do this twice to ensure that IDs are preserved
 			-- (the IDs flip each time). This is necessary since
 			-- the targets are stacked on top of other particles.
@@ -476,7 +491,7 @@ function get_disp_core_matrix_offset(x, y)
 end
 
 function disp56_core(opts)
-	opts = opts_bool(opts, 'omit_bray_blockers', false)
+	opts = opts_bool(opts, 'omit_bray_blockers')
 
 	port{v='drays_nw'}
 
@@ -670,7 +685,7 @@ function disp56_core(opts)
 			v='reset_pscn_sparkers',
 			f=disp56_core_reset_pscn_sparkers,
 			p=opts.p,
-			mount='core',
+			mount_self='core',
 		}
 	end}
 
@@ -761,7 +776,12 @@ function disp56_core(opts)
 			-- It's already at LAYER_SHIFT, so no additional range needed.
 			pstn{r=0, cap=piston_cap}
 
-			cray{iv='apom_pstn_id_grabber', done=0}
+			port{iv='apom_id_holder', p=findpt{
+				s=iv('resetter_pstn_target'),
+				ew=v('ppom_payload'):s(1),
+			}}
+			insl{p=iv('apom_id_holder'), done=0}
+			cray{to=iv('apom_id_holder'), done=0}
 			dray{r=1, to=iv('resetter_pstn_target')}
 
 			pscn{sprk=1, done=0}
@@ -793,11 +813,11 @@ function disp56_core(opts)
 				-- Copy the pixel colors into the double buffer.
 				port{iv='dray_target'}
 				pconfig{
-					part=v(iname('pixcol_dray_1')),
+					part=iv('pixcol_dray_1'),
 					to=iv('dray_target')
 				}
 				pconfig{
-					part=v(iname('pixcol_dray_2')),
+					part=iv('pixcol_dray_2'),
 					to=iv('dray_target'):s()
 				}
 
@@ -810,22 +830,6 @@ function disp56_core(opts)
 				end}
 			end
 		}
-
-		-- APOM ID holders for the PPOM retractor PSTNs.
-		-- These are placed in between the half-pixels in the double buffer,
-		-- so they can only be generated once we know where the double
-		-- buffer is.
-		foreach_piston{f=function(key)
-			local holder_loc = findpt{
-				s=iv('resetter_pstn_target'),
-				ew=opts.p,
-			}
-			pconfig{part=iv('apom_pstn_id_grabber'), to=holder_loc}
-			chain{p=holder_loc, f=function()
-				port{iv='apom_id_holder'}
-				insl{}
-			end}
-		end}
 	end}
 
 	-- Resetter mechanisms for the pistons' APOM.
@@ -943,18 +947,24 @@ function disp56_core(opts)
 			pscn{sprk=1, done=0}
 		end,
 	}
-	-- Re-spark the first row SPRK propagation seeds.
-	chain{
-		dx=1, p=findpt{
-			e=v('row_1_sprk_prop_dray_sparker'),
-			ns=v('ppom_payload'):e(0),
-		}:e(40), -- TODO: temporary offset
-		f=function()
-			cray{to=v('row_1_sprk_prop_dray_sparker'), done=0}
-			cray{ct='pscn', to=v('row_1_sprk_prop_dray_sparker')}
 
-			pscn{sprk=1, done=0}
-			ssconv{t='pscn', ox=-1}
+	-- Re-spark the first row SPRK propagation seeds.
+	port{
+		v='make_row_1_sprk_prop_seeds_sparker',
+		f=function(opts)
+			chain{
+				dx=1, p=findpt{
+					e=v('row_1_sprk_prop_dray_sparker'),
+					ns=opts.p,
+				},
+				f=function()
+					cray{to=v('row_1_sprk_prop_dray_sparker'), done=0}
+					cray{ct='pscn', to=v('row_1_sprk_prop_dray_sparker')}
+
+					pscn{sprk=1, done=0}
+					ssconv{t='pscn', ox=-1}
+				end
+			}
 		end
 	}
 
@@ -969,7 +979,7 @@ function disp56_core(opts)
 		schem{
 			v='data_in_swizzler',
 			f=disp56_core_data_in_swizzler,
-			mount='core',
+			mount_self='core',
 			p=opts.p,
 		}
 		port_alias{from='data_in_swizzler.data_in', to='data_in'}
@@ -991,53 +1001,69 @@ function disp56_core(opts)
 				v='sprk_filler',
 				f=disp56_core_sprk_filler,
 				p=opts.p,
-				mount='core',
+				mount_self='core',
 			}
 			schem{
 				v='aray_sparkers_placer',
 				f=disp56_core_aray_sparkers_placer,
 				p=v('sprk_filler.back_sparkers'):e(1),
-				mount='core',
+				mount_self='core',
+			}
+			connect{
+				v='make_row_1_sprk_prop_seeds_sparker',
+				p=v('sprk_filler.sparker_resetter'):nw(1),
+			}
+
+			-- Put the reset PSCN sparkers as close as possible, and
+			-- reuse a PSCN from the SPRK filler for the APOM.
+			connect{
+				v='make_reset_pscn_sparkers',
+				p=v('sprk_filler.sprk_seeds_col_1'):s(0),
+			}
+			connect{
+				v='reset_pscn_sparkers.make_apom_setup',
+				omit_pscn=true,
 			}
 		end,
 	}
 end
 
 -- Propagate a single pixcol to the entire matrix
-local function make_pixcol_propagator()
+local function disp56_pixcol_propagator()
 	local piston_heads = v('core.piston_heads')
 
 	-- Horizontal propagation
-	local horz_prop_s = v('core.pixcol_targets'):ne(0):e()
-	local horz_prop_e = v('core.pixcol_targets'):se(0):e()
 	local num_horz_prop_rows = intdiv(
-		odist(horz_prop_e:s(), horz_prop_s) + 1, 2
+		v('core.pixcol_targets'):sz().y + 1, 2
 	)
-	array{from=horz_prop_s, to=horz_prop_e:s(), dy=2, f=function(i)
-		chain{dx=1, f=function()
-			for j = 1, 4 do
-				aport{v='horz_prop_pixcol_matrix'}
-				if i ~= num_horz_prop_rows then
-					-- Fill out the spaces in between, to block diagonal BRAYs.
-					insl{oy=1, done=0}
+	array{
+		dy=2, r=v('core.pixcol_targets'):slice{x=-1}:shift{x=1},
+		f=function(i)
+			chain{dx=1, f=function()
+				for j = 1, 4 do
+					aport{v='horz_prop_pixcol_matrix'}
+					if i ~= num_horz_prop_rows then
+						-- Fill out the spaces in between, to block diagonal BRAYs.
+						insl{oy=1, done=0}
+					end
+					if j % 2 == 0 and i == num_horz_prop_rows then
+						-- The last row needs to copy in resetter DRAYs.
+						local spec = v('core.row_55_resetter_spec')
+						dray{r=spec.r, j=spec.j}
+					else
+						aport{v='horz_prop_pixcol_matrix_col_' .. j}
+						insl{}
+					end
 				end
-				if j % 2 == 0 and i == num_horz_prop_rows then
-					-- The last row needs to copy in resetter DRAYs.
-					local spec = v('core.row_55_resetter_spec')
-					dray{r=spec.r, j=spec.j}
-				else
-					aport{v='horz_prop_pixcol_matrix_col_' .. j}
-					insl{}
-				end
-			end
 
-			aport{v='horz_prop_dray_targets'}
-			adv{}
+				aport{v='horz_prop_dray_targets'}
+				adv{}
 
-			pscn{sprk=1, done=0}
-			ssconv{t='pscn', oy=-1}
-		end}
-	end}
+				pscn{sprk=1, done=0}
+				ssconv{t='pscn', oy=-1}
+			end}
+		end
+	}
 
 	-- Propagate the horizontal propagation DRAYs downwards.
 	local vert_prop_s = findpt{
@@ -1076,42 +1102,37 @@ local function make_pixcol_propagator()
 	local vert_prop_filler_n = v('vert_prop_dray_targets'):ls(1)
 	local vert_prop_filler_s = v('horz_prop_dray_targets'):ln(1)
 	array{
-		from=vert_prop_filler_s, to=vert_prop_filler_n, dy=-2,
-		f=function()
-			insl{oy=-1}
-		end
+		from=vert_prop_filler_s:n(), to=vert_prop_filler_n, dy=-2,
+		f=function() insl{} end
 	}
 	-- The FILTs fill the entire column.
 	-- We use FILTs so that the horizontal propagation DRAYs can be
 	-- all cleared with a single CRAY.
 	local vert_prop_filt_filler_s = v('horz_prop_dray_targets'):ls(0)
 	array{
-		from=vert_prop_filt_filler_s, to=vert_prop_filler_n, dy=-2,
-		f=function()
-			filt{oy=-1}
-		end
+		from=vert_prop_filt_filler_s:n(), to=vert_prop_filler_n, dy=-2,
+		f=function() filt{} end
 	}
 
 	-- Vertical pixel color propagation
-	local pixcol_vert_prop_seeds = {}
+	local vert_prop_seeds = {}
 	array{
-		from=v('horz_prop_pixcol_matrix'):nw(0),
-		to=v('horz_prop_pixcol_matrix'):ne(0),
+		r=v('horz_prop_pixcol_matrix'):slice{y=1},
 		f=function(i)
 			-- The pixcols must be vertically propagated before the DRAYs
 			-- used for horizontal propagation get updated.
 			local vert_prop_base = findpt{
 				w=v('vert_prop_dray_targets'):ln(0),
-				n=getcurs()
+				n=getcurs(),
 			}
 			chain{p=vert_prop_base, f=function()
 				aport{v='vert_prop_base'}
 
 				-- Stagger the DRAYs.
 				if i % 2 == 0 then
-					port{v='vert_prop_dray_' .. i, oy=-1}
+					port{iv='vert_prop_dray', oy=-1}
 				else
-					port{v='vert_prop_dray_' .. i}
+					port{iv='vert_prop_dray'}
 				end
 
 				-- Fill out the spaces between the DRAYs and the
@@ -1119,7 +1140,7 @@ local function make_pixcol_propagator()
 				local placeholders_n = vert_prop_base:s()
 				local placeholders_s = findpt{
 					ei=v('horz_prop_pixcol_matrix'):nw(0),
-					si=v('vert_prop_dray_' .. i),
+					si=iv('vert_prop_dray'),
 				}:n()
 				local placeholders_range = odist(
 					placeholders_n, placeholders_s
@@ -1133,7 +1154,7 @@ local function make_pixcol_propagator()
 					to=placeholders_s,
 					f=function(j)
 						if j == seed_index then
-							table.insert(pixcol_vert_prop_seeds, getcurs())
+							table.insert(vert_prop_seeds, getcurs())
 						end
 						insl{done=0}
 						-- Fill out the spaces in between, to block diagonal BRAYs.
@@ -1145,8 +1166,8 @@ local function make_pixcol_propagator()
 				}
 
 				-- Do the pixcol vert prop.
-				chain{dy=-1, p=v('vert_prop_dray_' .. i), f=function()
-					local exp_dray_to = v('horz_prop_pixcol_matrix_col_' .. i):ls(0)
+				chain{dy=-1, p=iv('vert_prop_dray'), f=function()
+					local exp_dray_to = iv('horz_prop_pixcol_matrix_col'):ls(0)
 					exponential_dray{blocksz=2 * 2, s=getcurs():s(), e=exp_dray_to}
 					if i % 2 == 1 then
 						aport{v='vert_prop_sparker_targets_low'}
@@ -1192,10 +1213,10 @@ local function make_pixcol_propagator()
 	for i = 1, 4 do
 		local seed_staging = findpt{
 			ns=v('vert_prop_dray_targets'):e(2),
-			ne=pixcol_vert_prop_seeds[i],
+			ne=vert_prop_seeds[i],
 		}
 		chain{p=seed_staging, dx=1, dy=-1, f=function()
-			aport{v='pixcol_vert_prop_seed_staging'}
+			aport{v='vert_prop_seed_staging'}
 			part{elem_name=PIXCOL_TYPE}
 			if (
 				highest_seed_staging == nil or
@@ -1204,7 +1225,7 @@ local function make_pixcol_propagator()
 				highest_seed_staging = seed_staging
 			end
 
-			dray{to=pixcol_vert_prop_seeds[i]}
+			dray{to=vert_prop_seeds[i]}
 
 			-- Place the sparkers for the staging pixcol propagators.
 			-- These must be copied in row by row to ensure that the DRAYs
@@ -1262,7 +1283,8 @@ local function make_pixcol_propagator()
 				ew=opts.p, s=v('pixcol_staging_copy_sparker_prop_sparkers'):ls(0)
 			}, v('pixcol_staging_copy_sparker_prop_sparkers'), 'inwr'
 		)
-		-- TODO: temporary position
+		-- Position flexible. Chosen to fit since it works nicely with the
+		-- first row propagation seeds sparker.
 		chain{
 			dx=1,
 			p=v('pixcol_staging_copy_sparker_resparker_sparkers'):le(5),
@@ -1284,17 +1306,16 @@ local function make_pixcol_propagator()
 		}
 	end}
 
-	setv('pixcol_vert_prop_seed_staging_seed', highest_seed_staging)
-	-- TODO: Temporary color for testing
-	pconfig{part=pmap(highest_seed_staging), dcolour=0xff00ffff}
+	port{v='vert_prop_seed_staging_seed', p=highest_seed_staging}
+	port_alias{from='vert_prop_seed_staging_seed', to='pixcol_in'}
 
 	-- Propagate the staging pixcols
 	chain{
-		dy=-1, p=v('pixcol_vert_prop_seed_staging'):ln(1),
+		dy=-1, p=v('vert_prop_seed_staging'):ln(1),
 		f=function()
 			stacked_dray{
-				s=v('pixcol_vert_prop_seed_staging_seed'):s(),
-				e=v('pixcol_vert_prop_seed_staging'):ls(0),
+				s=v('vert_prop_seed_staging_seed'):s(),
+				e=v('vert_prop_seed_staging'):ls(0),
 				done=0,
 			}
 			-- Protect seed pixcols from getting sparked.
@@ -1304,8 +1325,6 @@ local function make_pixcol_propagator()
 			insl{done=0, ox=-1, oy=1}
 			conv{from='pscn', to='sprk', ox=1}
 
-			-- upper bound for vertprop mechanism
-			port{v='vert_prop_ub'}
 			pscn{sprk=1}
 		end
 	}
@@ -1378,11 +1397,11 @@ local function make_pixcol_propagator()
 
 				-- Copy the last DRAY propagator DRAY.
 				-- This does not affect the free stack.
-				dray{to=v('vert_prop_dray_target_' .. i), done=0}
+				dray{to=iv('vert_prop_dray_target'), done=0}
 				-- Push the horizontal propagator DRAYs onto the free stack.
-				cray{v='horz_prop_dray_id_grabber_' .. i, done=0}
+				cray{to=ivv('horz_prop_dray_id_holders_row'), done=0}
 				-- Transfer the CRAY ID to its staging location.
-				cray{v='apom_cray_id_grabber_' .. i, done=0}
+				cray{to=ivv('apom_cray_id_holder'), done=0}
 				cray{ct='insl', to=iv('apom_cray_id_holder_staging')}
 
 				aport{v='apom_left_sparkers'}
@@ -1413,7 +1432,7 @@ local function make_pixcol_propagator()
 			chain{dx=1, f=function()
 				-- The CRAY is placed into the same spot as the DRAY
 				-- propagator DRAYs, reusing the sparker.
-				local cray_target = v('vert_prop_dray_target_' .. i)
+				local cray_target = iv('vert_prop_dray_target')
 				cray{
 					from=cray_target,
 					j=odist(cray_target, v('horz_prop_dray_targets'):ln(1)),
@@ -1421,7 +1440,7 @@ local function make_pixcol_propagator()
 				}
 
 				-- Push the DRAY propagator ID onto the free stack.
-				cray{to=v('vert_prop_dray_target_' .. i), done=0}
+				cray{to=iv('vert_prop_dray_target'), done=0}
 				-- Transfer the CRAY ID to the CRAY.
 				cray{to=iv('apom_cray_id_holder_staging'), done=0}
 				dray{to=cray_target}
@@ -1436,16 +1455,8 @@ local function make_pixcol_propagator()
 					aport{v='horz_prop_dray_id_holders_row_' .. i}
 					insl{}
 				end
-				pconfig{
-					part=v('horz_prop_dray_id_grabber_' .. i),
-					to=v('horz_prop_dray_id_holders_row_' .. i),
-				}
 
-				port{v='apom_cray_id_holder_' .. i}
-				pconfig{
-					part=v('apom_cray_id_grabber_' .. i),
-					to=v('apom_cray_id_holder_' .. i),
-				}
+				port{iv='apom_cray_id_holder'}
 				-- CRAY ID holder. When this ID updates, the CRAY deletes the
 				-- horizontal propagation DRAYs and pushes their IDs on the
 				-- free stack.
@@ -1463,18 +1474,18 @@ local function make_pixcol_propagator()
 
 				-- Transfer the CRAY ID back to its ID holder.
 				dray{to=cray_target, done=0}
-				cray{ct='insl', to=v('apom_cray_id_holder_' .. i), done=0}
+				cray{ct='insl', to=iv('apom_cray_id_holder'), done=0}
 				-- Pop horizontal propagation DRAY IDs from the free stack
 				-- and give them back to their ID holders.
 				-- Note that this reverses the ID order of the ID holders.
 				-- This does not affect functionality, even across reloads.
 				cray{
-					ct='insl', to=v('horz_prop_dray_id_holders_row_' .. i),
+					ct='insl', to=iv('horz_prop_dray_id_holders_row'),
 					done=0,
 				}
 				-- Pop the DRAY propagator ID from the free stack, and create
 				-- the sparker for the next step.
-				dray{r=2, to=v('vert_prop_dray_target_' .. i):e()}
+				dray{r=2, to=iv('vert_prop_dray_target'):e()}
 
 				aport{v='apom_right_sparkers_2'}
 				port{iv='apom_right_sparker_2'}
@@ -1748,13 +1759,13 @@ function disp56(opts)
 	}
 
 	-- Initial screen area.
+	-- TODO: temporary position
 	array{
 		n=56 * 2,
-		from=v('core.double_buffer'):ne(0):e(),
-		to=v('core.double_buffer'):se(0):e(),
+		r=v('core.double_buffer'):slice{x=-1}:shift{x=5},
 		f=function(i)
 			array{n=56 * 2, dx=1, f=function(j)
-				aport{v='screen_row_' .. i}
+				aport{v='screen'}
 				part{elem_name=PIXCOL_TYPE}
 			end}
 		end
@@ -1763,22 +1774,74 @@ function disp56(opts)
 	-- Expand the double buffer into full screen.
 	array{
 		r=v('core.double_buffer'):slice{x=1}:shift{x=-1},
-		f=function()
-			dray{}
+		f=function(i)
+			chain{dx=-1, f=function()
+				local template = nil
+				if (i - 1) % 4 <= 1 then
+					template = v('core.double_buffer'):slice{y=i, x1=2}
+				else
+					template = v('core.double_buffer'):slice{y=i, x2=-2}
+				end
+				dray{
+					tem=template,
+					to=v('screen'):slice{y=i, x1=2},
+					done=0
+				}
+				dray{
+					tem=template,
+					to=v('screen'):slice{y=i, x2=-2},
+					done=0
+				}
+				-- Prevent sparks from contaminating the double buffer
+				-- if a conductor is used for pixcol.
+				insl{}
+
+				aport{v='doubler_sparkers'}
+				inwr{sprk=1}
+
+				-- TODO: temporary logic to clear screen every frame
+				adv{}
+				if i % 2 == 0 then
+					adv{}; adv{}; adv{}
+				end
+				cray{to=v('screen'):slice{y=i}}
+				pscn{sprk=1, done=0}
+				ssconv{t='pscn', ox=1}
+			end}
 		end
 	}
 
-	make_pixcol_propagator()
+	chain{dy=1, p=v('doubler_sparkers'):s(2), f=function()
+		cray{to=v('doubler_sparkers'), done=0}
+		cray{ct='inwr', to=v('doubler_sparkers')}
+
+		cray{to=v('doubler_sparkers'), done=0}
+		pscn{sprk=1, done=0}
+		ssconv{t='pscn', oy=-1}
+
+		inwr{sprk=1, done=0}
+		ssconv{t='inwr', oy=1}
+	end}
+
+	schem{
+		v='pixcol_propagator',
+		f=disp56_pixcol_propagator,
+		mount={
+			core = 'core',
+		}
+	}
 
 	connect{
 		v='core.make_side_unit',
-		p=v('horz_prop_dray_targets'):e(2),
+		p=v('pixcol_propagator.horz_prop_dray_targets'):e(2),
 	}
 	connect{
-		v='core.make_reset_pscn_sparkers',
-		-- TODO: temporary location
-		p=v('core.ppom_payload'):e(10),
+		v='core.reset_pscn_sparkers.make_apom_reset',
+		p=v('core.double_buffer'):s(1),
 	}
 	-- TODO: temporary position
 	connect{v='core.data_in_swizzler', p=v('core.data_targets'):n(20)}
+
+	port_alias{from='core.data_in'}
+	port_alias{from='pixcol_propagator.pixcol_in'}
 end
