@@ -181,6 +181,7 @@ Util.CONDUCTORS = {
 }
 
 Util.FRME_RANGE = 15
+Util.STACK_LIMIT = 5
 
 local function make_part_fields()
 	local d = {}

@@ -659,10 +659,22 @@ end
 
 function Designer:plot_schem(opts)
 	opts = self:opts_pos(opts)
+	opts = self:opts_bool(opts, 'check_stack_limit', true)
 
 	local schem = self:top()
 	self:resolve_parts(schem)
 	reload_particle_order()
+
+	if opts.check_stack_limit then
+		self:wrap_with_xpcall(function()
+			schem:for_each_stack(function(p, stack)
+				assert(#stack <= Util.STACK_LIMIT,
+					'stack size ' .. tostring(#stack) ..
+					' exceeds stack limit at ' .. self:dump_var_to_str(p)
+				)
+			end)
+		end)()
+	end
 
 	schem:for_each_part(function(p, part)
 		p = p:add(opts.p)
