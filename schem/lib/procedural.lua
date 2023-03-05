@@ -44,14 +44,14 @@ function shr_1(opts)
 		end}
 	end}
 
-	chain{dy=-1, p=v('acol'):ln(1), f=function()
+	chain{dy=-1, p=v('acol'):n(), f=function()
 		filt{}
 		port{v='a_in', f=function(opts)
 			ldtc{to=opts.p, p=v('a_in')}
 		end}
 	end}
 
-	chain{dx=-1, p=v('inslcol'):ln(1), f=function()
+	chain{dx=-1, p=v('inslcol'):n(), f=function()
 		insl{}
 		adv{}
 		filt{mode='set', ct=bor(ka, 1)}

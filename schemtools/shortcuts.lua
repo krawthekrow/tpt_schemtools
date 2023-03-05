@@ -93,22 +93,22 @@ function Shortcuts.init(designer)
 					opts.dp = Point:new(0, 1)
 				end
 				if opts.dp.y > 0 then
-					opts.from = opts.r:ln(0)
-					opts.to = opts.r:ls(0)
+					opts.from = opts.r:n(0)
+					opts.to = opts.r:s(0)
 				else
-					opts.from = opts.r:ls(0)
-					opts.to = opts.r:ln(0)
+					opts.from = opts.r:s(0)
+					opts.to = opts.r:n(0)
 				end
 			elseif opts.r:is_horz() then
 				if opts.dp == nil then
 					opts.dp = Point:new(1, 0)
 				end
 				if opts.dp.x > 0 then
-					opts.from = opts.r:lw(0)
-					opts.to = opts.r:le(0)
+					opts.from = opts.r:w(0)
+					opts.to = opts.r:e(0)
 				else
-					opts.from = opts.r:le(0)
-					opts.to = opts.r:lw(0)
+					opts.from = opts.r:e(0)
+					opts.to = opts.r:w(0)
 				end
 			else
 				assert(false, 'array r not a line')

@@ -108,12 +108,12 @@ function aray_array_e(opts)
 		end
 	end}
 
-	insl{p=v('araycol1'):ln(1)}
+	insl{p=v('araycol1'):n()}
 	-- re-spark the last outer ARAY activator manually
-	ssconv{p=v('araycol1'):ls(0), t='inwr'}
+	ssconv{p=v('araycol1'):s(0), t='inwr'}
 
 	-- replace all other outer ARAY activators with the re-sparked activator
-	chain{dy=1, p=v('outer_sprkcol'):ls(1), f=function()
+	chain{dy=1, p=v('outer_sprkcol'):s(), f=function()
 		local respark_range = opts.n
 		if opts.n % 2 == 0 then respark_range = respark_range - 1 end
 		port{cmt=
@@ -125,5 +125,5 @@ function aray_array_e(opts)
 		pscn{sprk=1}
 	end}
 
-	port{v='logic_nw', p=v('araycol2'):ln(0):e()}
+	port{v='logic_nw', p=v('araycol2'):n(0):e()}
 end

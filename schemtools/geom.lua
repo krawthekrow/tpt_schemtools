@@ -106,24 +106,19 @@ function Rect:assert_vert()
 	assert(self:is_vert(), 'rect is not a vertical line')
 end
 
--- Always specify navigation steps explicitly for rects
--- to reduce confusion. Navigation is defined so that navigating
--- from a 1x1 rect is similar to navigating from a point.
+-- Navigation for rects is defined so that navigating from a
+-- 1x1 rect is similar to navigating from a point.
 
 function Rect:nw(n)
-	assert(n ~= nil, 'rect nav step must be explicit')
 	return self.lb:nw(n)
 end
 function Rect:ne(n)
-	assert(n ~= nil, 'rect nav step must be explicit')
 	return Point:new(self.ub.x, self.lb.y):ne(n)
 end
 function Rect:sw(n)
-	assert(n ~= nil, 'rect nav step must be explicit')
 	return Point:new(self.lb.x, self.ub.y):sw(n)
 end
 function Rect:se(n)
-	assert(n ~= nil, 'rect nav step must be explicit')
 	return self.ub:se(n)
 end
 
@@ -140,44 +135,17 @@ local function get_rect_nav_rand(l)
 end
 
 function Rect:n(n)
-	assert(n ~= nil, 'rect nav step must be explicit')
 	return self:nw(0):e(get_rect_nav_rand(self:sz().x)):n(n)
 end
 function Rect:s(n)
-	assert(n ~= nil, 'rect nav step must be explicit')
 	return self:sw(0):e(get_rect_nav_rand(self:sz().x)):s(n)
 end
 function Rect:w(n)
-	assert(n ~= nil, 'rect nav step must be explicit')
 	return self:nw(0):s(get_rect_nav_rand(self:sz().y)):w(n)
 end
 function Rect:e(n)
-	assert(n ~= nil, 'rect nav step must be explicit')
 	return self:ne(0):s(get_rect_nav_rand(self:sz().y)):e(n)
 end
-
--- Navigate from line. Only allows navigating off along the
--- long edge of a width-1 line.
-
-function Rect:ln(n)
-	self:assert_vert()
-	return self:n(n)
-end
-function Rect:ls(n)
-	self:assert_vert()
-	return self:s(n)
-end
-function Rect:lw(n)
-	self:assert_horz()
-	return self:w(n)
-end
-function Rect:le(n)
-	self:assert_horz()
-	return self:e(n)
-end
-
-function Rect:x() self:assert_vert(); return self.lb.x end
-function Rect:y() self:assert_horz(); return self.lb.y end
 
 function Rect:sz()
 	return self.ub:sub(self.lb):add(Point.ONE)

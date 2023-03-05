@@ -271,7 +271,7 @@ function disp56_core_tb()
 	}
 	connect{
 		v='core.reset_pscn_sparkers.make_apom_reset',
-		p=v('core.double_buffer'):s(1),
+		p=v('core.double_buffer'):s(),
 	}
 	connect{v='core.data_in_swizzler', p=v('core.data_targets'):n(20)}
 
