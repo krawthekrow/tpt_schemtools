@@ -454,21 +454,16 @@ function spu56()
 			aray{done=0}
 			ssconv{t='inwr'}
 			filt{mode='set'}
-			if i == 1 then port{v='shiftrow1_w'} end
-			filt{}
-			if i == 1 then port{v='shiftrow2_w'} end
-			filt{}
-			if i == 1 then port{v='androw_w'} end
+			aport{v='shiftrow1'}; filt{}
+			aport{v='shiftrow2'}; filt{}
 			filt{mode='and'}
-			if i == 1 then port{v='brayrow1_w'} end
-			if i == rowlen then port{v='brayrow1_e'} end
-			adv{}
+			aport{v='brayrow1'}; adv{}
 			adv{}
 			insl{}
 		end}
 	end}
 
-	chain{dx=-1, p=v('brayrow1_w'):w(), f=function()
+	chain{dx=-1, p=v('brayrow1'):lw(0), f=function()
 		-- leave space as we may need to offset the bottom row left by three
 		adv{n=3}
 		-- prevent retraction from pulling BRAYs along with it
@@ -499,7 +494,7 @@ function spu56()
 	-- only pull back the CRMC
 	pconfig{part=v('lmask_demux.resetter_pstn'), cap=1}
 	-- only retract the piston after the ARAYs have been fired
-	connect{v='lmask_demux.make_apom_resetter', p=v('arayrow'):lw(0):s()}
+	connect{v='lmask_demux.make_apom_resetter', p=v('arayrow'):s(1)}
 	-- compensate for offset space
 	pconfig{
 		part=v('lmask_demux.pstn_bin_1'),
@@ -510,7 +505,7 @@ function spu56()
 		f=spu56_rmask_hshift_demux,
 		v='rmask_hshift_demux',
 		ref='brayrow_e',
-		p=v('brayrow1_e'),
+		p=v('brayrow1'):le(0),
 	}
 	connect{
 		v='rmask_hshift_demux.make_left_modules',
@@ -540,10 +535,10 @@ function spu56()
 
 	-- LSH mode: OR then <<<
 	-- RSH mode: >>> then XOR
-	chain{dx=-1, p=v('shiftrow1_w'):w(), f=function()
+	chain{dx=-1, p=v('shiftrow1'):lw(0), f=function()
 	end}
 
-	chain{dx=-1, p=v('shiftrow2_w'):w(), f=function()
+	chain{dx=-1, p=v('shiftrow2'):lw(0), f=function()
 	end}
 end
 

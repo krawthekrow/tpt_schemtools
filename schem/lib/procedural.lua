@@ -69,8 +69,8 @@ function shr_1(opts)
 
 	schem{
 		f=aray_array_e,
-		p=v('core_block'):nw(0):w(1),
-		ref='araycol_ne',
+		p=v('core_block'):nw(0),
+		ref='logic_nw',
 		n=v('core_block'):sz().y,
 	}
 end

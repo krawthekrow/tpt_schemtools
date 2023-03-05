@@ -5,6 +5,7 @@ local function scratch(SchemTools)
 	-- from1d_32_tb()
 	-- vram56_tb()
 	-- spu56_tb()
+	-- disp56_core_tb()
 	-- disp56_tb()
 end
 

@@ -52,8 +52,7 @@ function pstn_demux_e(opts)
 			aport{v='pstn_bin'}
 			local target_r = opts.extension_map[bit_offs[i]]
 			local pstn_r = target_r - cum_piston_r
-			setv('pstn_bin_r_' .. i, pstn_r)
-			pstn{r=pstn_r, ct='dmnd', v='pstn_bin_' .. i}
+			pstn{r=pstn_r, ct='dmnd'}
 			cum_piston_r = target_r
 		end
 	end}
@@ -124,13 +123,15 @@ function pstn_demux_e(opts)
 		aport{v='apom_insl'}
 		insl{} -- holds the CRAY's ID
 		pstn{r=max_extension - cum_piston_r, v='resetter_pstn'}
-		cray{r=num_segs, from=v('cray_target'), to=v('pscnrow'):lw(0)}
+		cray{from=v('cray_target'), to=v('pscnrow')}
 
 		cray{v='apom_pstn_id_grabber', done=0}
 		cray{to=v('apom_insl'), done=0}
 		cray{v='apom_ldtc_maker', ct='ldtc', to=v('ldtc_target'), done=0}
+		-- Copy both the CRAY and PSTN at once.
 		dray{r=2, tos=v('cray_target'), done=0}
 		ssconv{ox=1, t='pscn'}
+
 		pscn{sprk=1}
 	end}
 
@@ -248,7 +249,7 @@ function from1d_32(opts)
 		filt{ct=opts.init_data[i]}
 	end}
 
-	port{v='io_min_y', p=v('data_block'):lw(0):s(2)}
+	port{v='io_nbnd', p=v('data_block'):lw(0):s(2)}
 	port{v='make_reader', f=function(opts)
 		if opts.name == nil then opts.name = 'reader' end
 		schem{
@@ -257,7 +258,6 @@ function from1d_32(opts)
 			p=findpt{s=v('data_block'):lw(0):s(), ew=opts.p},
 			ref='pstn_head',
 		}
-		port{v=opts.name .. '_pscn_placer', p=v('data_block'):le(1)}
 		connect{
 			v=opts.name .. '.make_pscn_placer',
 			p=v('data_block'):le(1),

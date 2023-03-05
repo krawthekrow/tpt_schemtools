@@ -21,17 +21,475 @@ function Range.new(from, to)
 	return {from=from, to=to}
 end
 
-local function disp56_core(opts)
+-- APOM mechanism to respark the resetter PSCNs.
+-- APOM is necessary since the resetter PSCNs are PPOM'd into place.
+-- The re-sparking happens after the PSCNs get unsparked, but before
+-- the core PPOM pistons retract.
+local function disp56_core_reset_pscn_sparkers()
+	port{v='cray_target_1', p=findpt{
+		e=v('core.reset_pscnrow_1'), ns=getcurs()
+	}:n(LAYER_SHIFT)}
+	port{v='cray_target_2', p=findpt{
+		e=v('core.reset_pscnrow_2'), ns=getcurs()
+	}:n(LAYER_SHIFT)}
+	port{v='id_holder_1', p=findpt{
+		e=v('core.reset_pscnrow_1'):s(2), ns=getcurs()
+	}}
+	port{v='id_holder_2', p=findpt{
+		e=v('core.reset_pscnrow_2'), ns=getcurs()
+	}}
+	aport{v='id_holders', p=v('id_holder_1')}
+	aport{v='id_holders', p=v('id_holder_2')}
+	insl{p=v('id_holder_1')}
+	insl{p=v('id_holder_2')}
+
+	-- The INWR needs to be sparked in-frame since the CRAY is APOM'd up.
+	local function make_sparker()
+		adv{}
+
+		port{iv='cray_sparker'}
+		inwr{sprk=1, done=0}
+		conv{from='sprk', to='inwr', under=1}
+
+		cray{ct='sprk', to=iv('cray_sparker'), life=3}
+
+		inwr{sprk=1, done=0}
+		ssconv{t='inwr', under=1}
+	end
+
+	chain{dx=1, p=v('cray_target_1'), f=function()
+		pushi(1)
+		make_sparker()
+		popi()
+	end}
+	chain{dx=1, p=v('cray_target_2'), f=function()
+		pushi(2)
+		make_sparker()
+		popi()
+	end}
+
+	-- APOM setup sequence.
+	-- TODO: temporary positions; make into port
+	chain{dy=-1, p=v('cray_target_1'):n(150), f=function()
+		port{v='apom_template'}
+		cray{
+			from=v('cray_target_1'), r=56,
+			s=v('core.reset_pscnrow_1'):e(0):n(LAYER_SHIFT)
+		}
+
+		assert(
+			v('id_holder_1'):s():eq(v('id_holder_2')),
+			'make these adjacent to save on setup/reset particles'
+		)
+		cray{to=v('id_holders'), done=0}
+		dray{to=v('cray_target_2'), done=0}
+		dray{to=v('cray_target_1')}
+
+		pscn{sprk=1, done=0}
+		ssconv{t='pscn', oy=1}
+	end}
+
+	-- APOM reset sequence.
+	-- TODO: temporary positions; make into port
+	chain{dy=1, p=v('id_holder_2'):s(120), f=function()
+		adv{}
+
+		dray{to=v('cray_target_1'), done=0}
+		dray{to=v('cray_target_2'), done=0}
+		cray{ct='insl', to=v('id_holders')}
+
+		pscn{sprk=1, done=0}
+		ssconv{t='pscn', oy=-1}
+	end}
+end
+
+-- External unit to copy in sparked PSCNs wherever the BRAY gets
+-- annihilated. These will spark the DRAYs used to write to the
+-- screen buffer.
+local function disp56_core_sprk_filler()
+	-- Three stacks of five DRAYs, minus one to invert.
+	local num_seeds = ceildiv(56, 14)
+
+	array{
+		n=56, dy=2, p=findpt{
+			e=v('core.bray_targets'):ne(0):n(LAYER_SHIFT),
+			ns=getcurs(),
+		},
+		f=function(i)
+			chain{dx=1, f=function()
+				if i % 2 == 1 then
+					-- Block diagonal BRAYs. This ensures that the set of IDs
+					-- containing the blocker and the BRAY target placeholders
+					-- will be preserved, to ensure that pixcols don't get
+					-- sparked by the DRAY sparkers.
+					port{iv='bray_blocker', p=findpt{
+						ns=v('core.bray_targets'):nw(0):w(),
+						w=getcurs(),
+					}}
+					insl{p=iv('bray_blocker'), done=0}
+					if i < 55 then
+						insl{p=iv('bray_blocker'):s(), done=0}
+					end
+					-- This row's blockers get removed when the data FILTs get
+					-- copied in, so we need to re-create them.
+					cray{ct='insl', to=iv('bray_blocker'), done=0}
+				end
+				local invert_s = findpt{
+					ns=v('core.bray_targets'):ne(0),
+					w=getcurs(),
+				}
+				-- Invert, so that we write the pixcol where bits are set
+				if i == 56 then
+					-- The last row does not have FILTs, so we need to include
+					-- those spots in the fill.
+					cray{ct='insl', s=invert_s, r=56 * 2}
+				else
+					cray{ct='insl', s=invert_s, r=56}
+				end
+
+				for j = 1, num_seeds do
+					aport{v='core_sparker_seeds_col_' .. j}
+					pscn{sprk=1}
+					adv{}
+				end
+
+				-- Replicate sprk pattern across three stacks.
+				local rep_len = num_seeds * 2
+				local rep_s =
+					iv('core.bray_targets_row'):le(1):n(LAYER_SHIFT)
+				local rep_e =
+					iv('core.bray_targets_row'):lw(0):n(LAYER_SHIFT)
+				stacked_dray{
+					r=num_seeds * 2,
+					s=rep_s, e=rep_s:w(rep_len * 5 - 1),
+				}
+				inwr{sprk=1, done=0}; ssconv{t='inwr', under=1}
+
+				stacked_dray{
+					r=num_seeds * 2, off=2,
+					s=rep_s:w(rep_len * 5), e=rep_s:w(rep_len * 10 - 1),
+				}
+				inwr{sprk=1, done=0}; ssconv{t='inwr', under=1}
+
+				stacked_dray{
+					r=num_seeds * 2, off=4,
+					s=rep_s:w(rep_len * 10), e=rep_e,
+				}
+				aport{v='back_sparkers'}
+				inwr{sprk=1, done=0}
+				ssconv{t='inwr', under=1}
+			end}
+		end
+	}
+
+	for i = 1, num_seeds do
+		-- Respark the core sparker seeds. This comes before the
+		-- seed propagation, so we must spark them with life=3 sparks.
+		chain{
+			dy=-1, p=v('core_sparker_seeds_col_' .. i):ln(2), 
+			f=function()
+				-- There is one seed every two spaces, so make sure we
+				-- spark the right number.
+				local num_targets = ceildiv(
+					v('core_sparker_seeds_col_' .. i):sz().y, 2
+				)
+				cray{
+					life=3, r=num_targets,
+					s=v('core_sparker_seeds_col_' .. i):ln(0)
+				}
+
+				cray{ct='insl', to=v('core_sparker_seeds_col_' .. i), done=0}
+				cray{ct='pscn', to=v('core_sparker_seeds_col_' .. i), done=0}
+				ssconv{t='pscn', done=0}
+				if i ~= 1 then
+					-- Ensure the resparker CRAYs only touch the particles
+					-- that need resparking. This is necessary to ensure
+					-- that IDs are preserved, since these sparkers are
+					-- stacked on top of other particles.
+					filt{ox=-1, done=0}
+				end
+				-- This will be resparked before the lower CRAY updates.
+				aport{v='core_sparker_seeds_sparkers'}
+				inwr{sprk=1}
+
+				pscn{sprk=1}
+			end
+		}
+	end
+
+	-- Respark the sparkers.
+	chain{
+		-- TODO: temporary position
+		dx=1, p=v('core_sparker_seeds_sparkers'):le(3),
+		f=function()
+			local respark_s = v('core_sparker_seeds_sparkers'):le(0)
+			-- Do this twice to ensure that IDs are preserved
+			-- (the IDs flip each time). This is necessary since
+			-- the targets are stacked on top of other particles.
+			cray{r=num_seeds, s=respark_s, done=0}
+			cray{ct='inwr', r=num_seeds, s=respark_s, done=0}
+			cray{r=num_seeds, s=respark_s, done=0}
+			cray{ct='inwr', r=num_seeds, s=respark_s}
+
+			cray{life=3, r=num_seeds, s=respark_s, done=0}
+			ssconv{t='pscn', ox=1, oy=1, done=0}
+			pscn{sprk=1}
+
+			inwr{sprk=1, done=0}
+			ssconv{t='inwr', ox=1, oy=1}
+		end
+	}
+end
+
+-- External PPOM to replace the core's DRAY sparker slots with sparkers
+-- for the next row's ARAYs, after the DRAYs have fired.
+-- PPOM is necessary because each row's job must fire before their
+-- respective ARAYs are updated, which happens earlier in the frame
+-- because the whole core itself is PPOM'd.
+local function disp56_core_aray_sparkers_placer()
+	-- We can omit the last row since there are no more ARAYs to fire.
+	-- For the second-last row, we can omit the sparking CRAY, but we
+	-- still need to replace any SPRK-ed PSCNs to prevent firing
+	-- PSCN-BRAYs.
+	array{
+		n=56 - 1, dy=2,
+		p=findpt{ns=getcurs(), e=v('core.pixcol_dray_matrix'):ne(0)},
+		f=function(i)
+			chain{dx=1, f=function()
+				local is_last_row = (i == 56 - 1)
+				aport{v='ppom_payload'}
+				if not is_last_row then
+					aport{v='ppom_payload', oy=1}
+				end
+
+				-- Delete whatever is currently there.
+				-- This ignores the FILTs on every other column.
+				cray{
+					r=56,
+					from=getcurs():n():s(LAYER_SHIFT),
+					s=iv('core.bray_targets_row'):le(0),
+					done=is_last_row,
+				}
+				if not is_last_row then
+					insl{oy=1}
+				end
+
+				pscn{sprk=1, done=is_last_row}
+				if not is_last_row then
+					filt{oy=1}
+				end
+
+				conv{from='sprk', to='pscn', done=0}
+				if is_last_row then
+					conv{from='pscn', to='sprk'}
+				else
+					conv{from='pscn', to='sprk', oy=1}
+				end
+
+				-- Place down INWRs.
+				local repl_type = 'inwr'
+				if is_last_row then
+					repl_type = 'insl'
+				end
+				cray{
+					ct=repl_type, r=56,
+					from=getcurs():n():s(LAYER_SHIFT),
+					s=iv('core.bray_targets_row'):le(0),
+					done=is_last_row,
+				}
+				if not is_last_row then
+					insl{oy=1}
+				end
+
+				pscn{sprk=1, done=is_last_row}
+				if not is_last_row then
+					filt{oy=1}
+				end
+
+				aport{v='ppom_payload'}
+				conv{from='sprk', to='pscn', done=0}
+				if is_last_row then
+					conv{from='pscn', to='sprk'}
+				else
+					conv{from='pscn', to='sprk', oy=1}
+				end
+
+				-- Spark the INWRs.
+				if not is_last_row then
+					cray{
+						life=3, r=56,
+						from=getcurs():n():s(LAYER_SHIFT),
+						s=iv('core.bray_targets_row'):le(0),
+						done=is_last_row,
+					}
+					insl{oy=1}
+
+					aport{v='ppom_payload', oy=1}
+					aport{v='back_sparkers'}
+					inwr{sprk=1, done=is_last_row}
+					filt{oy=1}
+				end
+			end}
+		end
+	}
+
+	-- We save a column by sparking the rightmost CRAY sparkers externally
+	-- instead of with inline CONVs. This doesn't apply to the other CRAY
+	-- sparkers since we need to leave a space between each sparker and
+	-- the next CRAY to prevent the next CRAY from firing in the wrong
+	-- direction.
+	chain{dy=1, p=v('back_sparkers'):ls(3), f=function()
+		cray{r=56 - 2, s=v('back_sparkers'):ls(0), done=0}
+		cray{ct='inwr', r=56 - 2, s=v('back_sparkers'):ls(0)}
+
+		cray{r=56 - 2, s=v('back_sparkers'):ls(0), done=0}
+		pscn{sprk=1, done=0}
+		ssconv{t='pscn', oy=-1}
+
+		inwr{sprk=1}
+
+		ssconv{t='inwr'}
+	end}
+
+	-- PPOM mechanism for the ARAY sparker placers.
+
+	array{
+		r=v('ppom_payload'):slice{y=1}:shift{y=-1},
+		f=function() frme{} end,
+	}
+
+	-- The pusher PSTN should update only after the entire mechanism
+	-- updates, so it needs to be moved up with APOM.
+	-- This creates the ID holder for the APOM.
+	chain{p=v('ppom_payload'):sw(0):s(), f=function()
+		port{v='pusher_id_holder'}
+		insl{}
+	end}
+
+	-- The top part of the mechanism, which includes the piston
+	-- and the pusher PSTN APOM setup sequence.
+	chain{dy=-1, p=v('ppom_payload'):nw(0):n(2), f=function()
+		-- Add one to include the frame.
+		local piston_cap = v('ppom_payload'):sz().y + 1
+		pstn{life=1}
+
+		pstn{}
+
+		pstn{ct='dmnd', cap=piston_cap, done=0}
+		nscn{sprk=1, ox=1, done=0}
+		ssconv{t='nscn', ox=1, under=1}
+
+		port{v='pusher_target'}
+		-- This will be sparked with life=3 CRAY.
+		port{v='pusher_sparker', ox=-1}
+		conv{from='sprk', to='pscn', ox=-1, done=0}
+		pscn{sprk=1, ox=-1}
+
+		-- APOM setter for the pusher
+		pstn{ct='dmnd', r=0, cap=piston_cap}
+
+		cray{to=v('pusher_id_holder'), done=0}
+		dray{to=v('pusher_target'), done=0}
+		ssconv{t='pscn', done=0}
+		dmnd{}
+
+		pscn{sprk=1, done=0}
+	end}
+
+	-- Mechanism to spark the pusher PSTN sparker with life=3 CRAY.
+	-- Due to APOM, the pusher PSTN only updates long after the SPRK
+	-- and its surrounding area updates.
+	chain{
+		dx=1, p=v('pusher_sparker'):e(4), f=function()
+			cray{life=3, to=v('pusher_sparker'), done=0}
+			ssconv{t='inwr'}
+
+			inwr{sprk=1}
+		end
+	}
+
+	-- The bottom part of the mechanism, which includes the pusher PSTN
+	-- APOM reset sequence.
+	chain{
+		dy=1, p=v('pusher_id_holder'):s(),
+		f=function()
+			cray{to=v('pusher_target'), done=0}
+			cray{ct='insl', to=v('pusher_id_holder')}
+
+			pscn{sprk=1, done=0}
+			ssconv{t='pscn', ox=1, oy=-1}
+		end
+	}
+end
+
+local function disp56_core_data_in_swizzler(opts)
+	local staging_positions = {}
+	-- ARAY offset required, assuming first offset is 0
+	local rel_offsets = {}
+	local max_offset = 0
+	for i = 1, 56 * 2 do
+		table.insert(staging_positions, findpt{
+			ew=opts.p,
+			ne=v('core.ldtc_positions')[i],
+		})
+		table.insert(rel_offsets,
+			staging_positions[i].x - staging_positions[1].x + 1 - i
+		)
+		if rel_offsets[i] > max_offset then
+			max_offset = rel_offsets[i]
+		end
+	end
+	for i = 1, 56 * 2 do
+		chain{dx=1, dy=-1, p=staging_positions[i], f=function()
+			pconfig{part=v('core.data_reader_' .. i), to=getcurs()}
+			filt{}
+			dtec{r=max_offset - rel_offsets[i] + 1}
+		end}
+	end
+	array{
+		n=56 * 2, dx=1,
+		from=staging_positions[1]:ne(3):e(max_offset),
+		f=function(i)
+			chain{dx=1, dy=-1, f=function()
+				aport{v='data_in'}
+				port{iv='bray_blocker', ox=-2, oy=2}
+				filt{mode='set'}
+
+				aray{}
+				inwr{sprk=1, done=0}; ssconv{t='inwr', ox=-1, oy=1}
+
+				if pmap(iv('bray_blocker')) == nil then
+					insl{p=iv('bray_blocker')}
+				end
+			end}
+		end
+	}
+end
+
+function get_disp_core_matrix_offset(x, y)
+	local p = p(x - 1, y - 1):mult(2)
+	if y % 2 == 1 then
+		return p:e()
+	else
+		return p
+	end
+end
+
+function disp56_core(opts)
+	opts = opts_bool(opts, 'omit_bray_blockers', false)
+
 	port{v='drays_nw'}
 
 	local function disp_matrix(opts)
 		opts = opts_pos(opts)
-		array{n=56, dy=2, p=opts.p, f=function(i)
-			if i % 2 == 1 then
-				adv{dx=1}
-			end
+		array{n=56, dy=2, f=function(i)
 			array{n=56, dx=2, f=function(j)
-				opts.f(i, j)
+				chain{
+					p=opts.p:add(get_disp_core_matrix_offset(j, i)),
+					f=function()
+						opts.f(i, j)
+					end,
+				}
 			end}
 		end}
 	end
@@ -42,9 +500,9 @@ local function disp56_core(opts)
 			-- These DRAYs duplicate an INSL downwards.
 			-- Their tmp2s will be configured later once the double buffer
 			-- position is known.
-			aport{v='dray_deferred'}
-			dray{r=1, iv='dray_deferred_1', done=0}
-			dray{r=1, iv='dray_deferred_2'}
+			aport{v='pixcol_dray_matrix'}
+			dray{r=1, iv='pixcol_dray_1', done=0}
+			dray{r=1, iv='pixcol_dray_2'}
 		end}
 	end}
 
@@ -79,13 +537,14 @@ local function disp56_core(opts)
 
 			-- This holds the pixcol that gets copied down.
 			aport{v='pixcol_row_' .. i}
-			aport{v='pixcol_matrix'}
+			aport{v='pixcol_targets'}
 			insl{}
 
 			-- This is the position where the DRAY would be after the shift.
 			if i >= 55 then
 				-- These serve as seeds to duplicate back over the entire
 				-- core matrix once we're done, for resetting.
+				aport{v='aray_matrix'}
 				aray{}
 			else
 				-- Apart from the last two rows, this space would
@@ -118,6 +577,7 @@ local function disp56_core(opts)
 				adv{}
 			end
 
+			aport{v='aray_matrix'}
 			aray{}
 
 			aport{v='sprk_targets'}
@@ -128,23 +588,23 @@ local function disp56_core(opts)
 				-- We only do this for the top row, because in the other rows
 				-- this role is shared with the BRAY target from the previous row.
 				insl{}
-
-				aport{v='frame'}
-				frme{}
 			end
 
 			-- Fill up the top to make a flat, pushable block.
 			if i == 2 then
 				local col_n = findpt{
 					n=v('sprk_target_2_' .. j),
-					ew=v('sprk_target_1_' .. j),
+					ew=v('sprk_target_1_' .. j):n(),
 				}
-				array{to=col_n, f=function() insl{} end}
+				while not getcurs():eq(col_n) do insl{} end
+			end
 
-				chain{p=col_n:n(), f=function()
-					aport{v='frame'}
-					frme{}
-				end}
+			-- Record the range of the total piston payload.
+			aport{v='ppom_payload', oy=1}
+
+			if i <= 2 then
+				aport{v='frame'}
+				frme{}
 			end
 		end}
 	end}
@@ -176,10 +636,11 @@ local function disp56_core(opts)
 			end
 			dray{r=specs[#specs].r, j=specs[#specs].j}
 
-			-- Record how large the top layer is to set the PSTN tmps.
-			aport{v='top_layer_lb'}
-
-			-- TODO: These need to be resparked.
+			if i % 2 == 1 then
+				aport{v='reset_pscnrow_1'}
+			else
+				aport{v='reset_pscnrow_2'}
+			end
 			pscn{sprk=1}
 
 			if is_row_55 then
@@ -188,8 +649,30 @@ local function disp56_core(opts)
 				-- Reset the last row's resetter sparkers.
 				conv{from='sprk', to='pscn'}
 			end
+
+			-- Record the range of the total piston payload.
+			aport{v='ppom_payload', oy=-1}
 		end}
 	end
+
+	-- The last row doesn't need any data, but it does need the
+	-- INSLs cleared to make way for the BRAYs.
+	chain{
+		dx=-1, p=v('bray_targets'):sw(0):n(LAYER_SHIFT):w(),
+		f=function()
+			cray{to=v('bray_targets'):slice{y=-1}:shift{y=-LAYER_SHIFT}}
+			pscn{sprk=1, done=0}; ssconv{t='pscn', ox=1}
+		end
+	}
+
+	port{v='make_reset_pscn_sparkers', f=function(opts)
+		schem{
+			v='reset_pscn_sparkers',
+			f=disp56_core_reset_pscn_sparkers,
+			p=opts.p,
+			mount='core',
+		}
+	end}
 
 	-- Compute positions of pistons used to shift the top layer.
 	setv('piston_heads', {})
@@ -233,16 +716,18 @@ local function disp56_core(opts)
 		for _, p in pairs(v('piston_heads')) do
 			local key = odist(p, v('frame'):lw(0))
 			chain{p=p, f=function()
+				pushi(key)
 				opts.f(key)
+				popi(key)
 			end}
 		end
 	end
 
+	-- Create the pistons.
 	foreach_piston{f=function(key)
 		chain{oy=-1, dy=-1, f=function()
-			local piston_cap = odist(
-				v('top_layer_lb'):sw(0), v('frame'):lw(0)
-			) + 1
+			-- Add one to include the frame.
+			local piston_cap = v('ppom_payload'):sz().y + 1
 
 			for i = 1, LAYER_SHIFT do
 				pstn{life=1}
@@ -260,13 +745,13 @@ local function disp56_core(opts)
 			-- We restore the top layer only after the core is done.
 			-- To ensure this happens after the core is done, use APOM
 			-- to move the PSTN's ID to below the double buffer.
-			port{v='resetter_pstn_target_' .. key}
+			port{iv='resetter_pstn_target'}
 			chain{ox=1, f=function()
 				conv{from='sprk', to='pscn', oy=-1, done=0}
 				-- The sparker needs to be re-sparked with life=3 since the PSTN
 				-- only activates after it is re-sparked.
 				aport{v='resetter_pstn_sparkers'}
-				port{v='resetter_pstn_sparker_' .. key}
+				port{iv='resetter_pstn_sparker'}
 				pscn{}
 			end}
 
@@ -276,51 +761,15 @@ local function disp56_core(opts)
 			-- It's already at LAYER_SHIFT, so no additional range needed.
 			pstn{r=0, cap=piston_cap}
 
-			cray{v='apom_pstn_id_grabber_' .. key, done=0}
-			dray{r=1, to=v('resetter_pstn_target_' .. key)}
+			cray{iv='apom_pstn_id_grabber', done=0}
+			dray{r=1, to=iv('resetter_pstn_target')}
 
 			pscn{sprk=1, done=0}
 			ssconv{t='pscn', oy=1}
 		end}
 	end}
 
-	port{v='double_buffer_nw', f=function(opts)
-		disp_matrix{p=opts.p, f=function(i, j)
-			-- Copy the pixel colors into the double buffer.
-			port{iv='dray_target'}
-			pconfig{
-				part=v(iname('dray_deferred_1')),
-				to=iv('dray_target')
-			}
-			pconfig{
-				part=v(iname('dray_deferred_2')),
-				to=iv('dray_target'):s()
-			}
-
-			-- Placeholders to show where the double buffer is.
-			chain{dy=1, p=iv('dray_target'), f=function()
-				aport{v='double_buffer'}
-				part{elem_name=PIXCOL_TYPE}
-				aport{v='double_buffer'}
-				part{elem_name=PIXCOL_TYPE}
-			end}
-		end}
-
-		-- ID holders for APOM.
-		-- These are placed in between the half-pixels in the double buffer.
-		foreach_piston{f=function(key)
-			local holder_loc = findpt{
-				s=v('resetter_pstn_target_' .. key),
-				ew=opts.p,
-			}
-			pconfig{part=v('apom_pstn_id_grabber_' .. key), to=holder_loc}
-			chain{p=holder_loc, f=function()
-				port{v='apom_id_holder_' .. key}
-				insl{}
-			end}
-		end}
-	end}
-
+	-- Combined mechanism to spark the pistons' PSCN sparkers.
 	chain{dx=1, p=v('resetter_pstn_sparkers'):le(2), f=function()
 		port{v='sparker_sparker_loc'}
 		chain{f=function()
@@ -328,7 +777,7 @@ local function disp56_core(opts)
 				cray{
 					life=3,
 					p=v('sparker_sparker_loc'),
-					to=v('resetter_pstn_sparker_' .. key),
+					to=iv('resetter_pstn_sparker'),
 					done=0,
 				}
 			end}
@@ -337,21 +786,221 @@ local function disp56_core(opts)
 		ssconv{t='inwr', ox=-1, oy=1}
 	end}
 
-	-- Resetter mechanisms for APOM.
+	port{v='double_buffer_nw', f=function(opts)
+		disp_matrix{
+			p=findpt{ew=opts.p, s=v('pixcol_dray_matrix'):sw(0)},
+			f=function(i, j)
+				-- Copy the pixel colors into the double buffer.
+				port{iv='dray_target'}
+				pconfig{
+					part=v(iname('pixcol_dray_1')),
+					to=iv('dray_target')
+				}
+				pconfig{
+					part=v(iname('pixcol_dray_2')),
+					to=iv('dray_target'):s()
+				}
+
+				-- Placeholders to show where the double buffer is.
+				chain{dy=1, p=iv('dray_target'), f=function()
+					aport{v='double_buffer'}
+					part{elem_name=PIXCOL_TYPE}
+					aport{v='double_buffer'}
+					part{elem_name=PIXCOL_TYPE}
+				end}
+			end
+		}
+
+		-- APOM ID holders for the PPOM retractor PSTNs.
+		-- These are placed in between the half-pixels in the double buffer,
+		-- so they can only be generated once we know where the double
+		-- buffer is.
+		foreach_piston{f=function(key)
+			local holder_loc = findpt{
+				s=iv('resetter_pstn_target'),
+				ew=opts.p,
+			}
+			pconfig{part=iv('apom_pstn_id_grabber'), to=holder_loc}
+			chain{p=holder_loc, f=function()
+				port{iv='apom_id_holder'}
+				insl{}
+			end}
+		end}
+	end}
+
+	-- Resetter mechanisms for the pistons' APOM.
 	port{v='make_apom_resetters', f=function(opts)
 		foreach_piston{f=function(key)
 			local resetter_loc = findpt{
-				s=v('resetter_pstn_target_' .. key),
+				s=iv('resetter_pstn_target'),
 				ew=opts.p,
 			}
 			chain{dy=1, p=resetter_loc, f=function()
-				cray{to=v('resetter_pstn_target_' .. key), done=0}
-				cray{ct='insl', to=v('apom_id_holder_' .. key)}
+				cray{to=iv('resetter_pstn_target'), done=0}
+				cray{ct='insl', to=iv('apom_id_holder')}
 				pscn{sprk=1, done=0}
 				ssconv{t='pscn', oy=-1}
 			end}
 		end}
 	end}
+
+	-- Propagate data FILTs in from the left side.
+	-- This only happens after the layer shift, so we need to account
+	-- for it in positioning.
+	setv('ldtc_positions', {})
+	array{
+		dy=2,
+		r=v('data_targets'):slice{x=1}:shift{x=-1, y=-LAYER_SHIFT},
+		f=function(i)
+			chain{dx=-1, f=function()
+				if i % 2 == 1 then
+					filt{}
+				end
+				for j = 1, 2 do
+					adv{}
+
+					chain{dx=1, dy=-1, f=function()
+						filt{mode='set'}
+
+						local data_index = (i-1) * 2
+						if i % 2 == 1 then
+							data_index = data_index + j
+						else
+							data_index = data_index + (3-j)
+						end
+						v('ldtc_positions')[data_index] = getcurs()
+						ldtc{v='data_reader_' .. data_index}
+					end}
+				end
+				if i % 2 == 0 then
+					adv{}
+				end
+
+				local exp_dray_to = findpt{
+					e=getcurs(),
+					ns=v('data_targets'):ne(0),
+				}
+				exponential_dray{blocksz=2 * 2, s=getcurs():e(), e=exp_dray_to}
+				aport{v='data_prop_sparkers'}
+				pscn{sprk=1}
+			end}
+		end
+	}
+
+	-- External mechanism to spark the sparkers for the data FILT
+	-- propagation DRAYs.
+	chain{
+		dy=1, p=v('data_prop_sparkers'):ls(2), f=function()
+			cray{ct='insl', to=v('data_prop_sparkers'), done=0}
+			cray{ct='pscn', to=v('data_prop_sparkers')}
+
+			cray{to=v('data_prop_sparkers'), done=0}
+			pscn{sprk=1, done=0}
+			ssconv{t='pscn', oy=-1}
+
+			inwr{sprk=1, done=0}
+			ssconv{t='inwr', oy=1}
+		end
+	}
+
+	-- Propagate ARAY sparkers for the first two rows, piggybacking
+	-- on the first two rows' data FILT propagation.
+	-- This is only possible for the first two rows since these SPRK
+	-- rows aren't shared with a previous BRAY row. For the other rows,
+	-- we use a separate PPOM mechanism to propagate the SPRKs.
+
+	-- Second row.
+	chain{
+		dx=-1, p=v('sprk_targets'):nw(0):n(LAYER_SHIFT):s(2):w(2),
+		f=function()
+			ssconv{t='inwr', done=0}; inwr{sprk=1}
+			adv{}
+			ssconv{t='inwr', done=0}; inwr{sprk=1}
+		end,
+	}
+	-- First row.
+	chain{
+		dx=-1, p=v('sprk_targets'):nw(0):n(LAYER_SHIFT):w(),
+		f=function()
+			-- Add INSLs above to block stray BRAYs from the core matrix.
+			ssconv{t='inwr', done=0}; inwr{sprk=1, done=0}; insl{oy=-1}
+			filt{}
+			ssconv{t='inwr', done=0}; inwr{sprk=1, done=0}; insl{oy=-1}
+			filt{}
+
+			-- Unlike the other rows, don't leave a space before the DRAY,
+			-- since we can't fill it with a solid SPRK to propagate.
+
+			local exp_dray_to = findpt{
+				e=getcurs(),
+				ns=v('sprk_targets'):ne(0),
+			}
+			exponential_dray{blocksz=2 * 2, s=getcurs():e(), e=exp_dray_to}
+
+			-- Since we're offset by one, this sparker will have to be
+			-- re-sparked separately from the others.
+			port{v='row_1_sprk_prop_dray_sparker'}
+			pscn{sprk=1, done=0}
+		end,
+	}
+	-- Re-spark the first row SPRK propagation seeds.
+	chain{
+		dx=1, p=findpt{
+			e=v('row_1_sprk_prop_dray_sparker'),
+			ns=v('ppom_payload'):e(0),
+		}:e(40), -- TODO: temporary offset
+		f=function()
+			cray{to=v('row_1_sprk_prop_dray_sparker'), done=0}
+			cray{ct='pscn', to=v('row_1_sprk_prop_dray_sparker')}
+
+			pscn{sprk=1, done=0}
+			ssconv{t='pscn', ox=-1}
+		end
+	}
+
+	-- The input port for the draw pattern.
+	-- The port needs to reorder FILTs for detection by the LDTCs.
+	-- It does so by using an intermediate ARAY-DTEC stage, with
+	-- the DTECs offset and set to different ranges to capture
+	-- the correct FILT data.
+	-- Args:
+	-- - p: Horizontal reference for bottom of input port
+	port{v='data_in_swizzler', f=function(opts)
+		schem{
+			v='data_in_swizzler',
+			f=disp56_core_data_in_swizzler,
+			mount='core',
+			p=opts.p,
+		}
+		port_alias{from='data_in_swizzler.data_in', to='data_in'}
+	end}
+
+	if not opts.omit_bray_blockers then
+		array{
+			r=v('aray_matrix'):slice{x=-1}
+				:shift{x=1, y=-1}:shift{y=-LAYER_SHIFT},
+			f=function() insl{} end,
+		}
+	end
+
+	port{
+		v='make_side_unit',
+		p=v('pixcol_dray_matrix'):ne(0):e(),
+		f=function(opts)
+			schem{
+				v='sprk_filler',
+				f=disp56_core_sprk_filler,
+				p=opts.p,
+				mount='core',
+			}
+			schem{
+				v='aray_sparkers_placer',
+				f=disp56_core_aray_sparkers_placer,
+				p=v('sprk_filler.back_sparkers'):e(1),
+				mount='core',
+			}
+		end,
+	}
 end
 
 -- Propagate a single pixcol to the entire matrix
@@ -359,8 +1008,8 @@ local function make_pixcol_propagator()
 	local piston_heads = v('core.piston_heads')
 
 	-- Horizontal propagation
-	local horz_prop_s = v('core.pixcol_matrix'):ne(0):e()
-	local horz_prop_e = v('core.pixcol_matrix'):se(0):e()
+	local horz_prop_s = v('core.pixcol_targets'):ne(0):e()
+	local horz_prop_e = v('core.pixcol_targets'):se(0):e()
 	local num_horz_prop_rows = intdiv(
 		odist(horz_prop_e:s(), horz_prop_s) + 1, 2
 	)
@@ -897,10 +1546,10 @@ local function make_pixcol_propagator()
 	local horz_prop_dray_configs = get_exponential_dray_configs{
 		blocksz=2 * 2,
 		s=findpt{
-			e=v('core.pixcol_matrix'):ne(0),
+			e=v('core.pixcol_targets'):ne(0),
 			ns=v('horz_prop_dray_targets'):w(1),
 		},
-		e=v('core.pixcol_matrix'):nw(0),
+		e=v('core.pixcol_targets'):nw(0),
 		skip_curs_check=true,
 	}
 
@@ -962,7 +1611,7 @@ local function make_pixcol_propagator()
 	-- TODO: Temporary position for testing
 	local stage_4_seed_1_placer_e = findpt{
 		w=v('stage_4_seed_1_target'),
-		ns=v('core.pixcol_matrix'):nw(0):w(10),
+		ns=v('core.pixcol_targets'):nw(0):w(10),
 	}
 	local stage_5_seed_2_placer_e = findpt{
 		w=v('stage_5_seed_2_target'),
@@ -1084,12 +1733,15 @@ end
 
 function disp56(opts)
 	schem{
-		f=disp56_core,
 		v='core',
+		f=disp56_core,
+		omit_bray_blockers=true,
 	}
 
-	-- TODO: temporary location
-	connect{v='core.double_buffer_nw', p=v('core.dray_deferred'):sw(0):s(9)}
+	connect{
+		v='core.double_buffer_nw',
+		p=v('core.ppom_payload'):s(1),
+	}
 	connect{
 		v='core.make_apom_resetters',
 		p=v('core.double_buffer'):sw(0):s(),
@@ -1110,477 +1762,23 @@ function disp56(opts)
 
 	-- Expand the double buffer into full screen.
 	array{
-		from=v('core.double_buffer'):nw(0):w(),
-		to=v('core.double_buffer'):sw(0):w(),
+		r=v('core.double_buffer'):slice{x=1}:shift{x=-1},
 		f=function()
 			dray{}
 		end
 	}
 
-	-- Propagating the data FILTs only happens after the layer shift,
-	-- so we need to account for it in positioning.
-	local data_prop_from =
-		v('core.data_targets'):nw(0):n(LAYER_SHIFT):w()
-	local data_prop_to =
-		v('core.data_targets'):sw(0):n(LAYER_SHIFT):w():s()
-	local ldtc_positions = {}
-	array{dy=2, from=data_prop_from, to=data_prop_to, f=function(i)
-		chain{dx=-1, f=function()
-			if i % 2 == 1 then
-				filt{}
-			end
-			for j = 1, 2 do
-				adv{}
-
-				filt{mode='set', done=0}
-				local data_index = (i-1) * 2 + (3-j)
-				ldtc_positions[data_index] = getcurs()
-				ldtc{v='data_reader_' .. data_index, ox=1, oy=-1}
-			end
-			if i % 2 == 0 then
-				adv{}
-			end
-
-			local exp_dray_to = findpt{
-				e=getcurs(),
-				ns=v('core.data_targets'):ne(0),
-			}
-			exponential_dray{blocksz=2 * 2, s=getcurs():e(), e=exp_dray_to}
-			aport{v='data_prop_sparkers'}
-			pscn{sprk=1}
-		end}
-	end}
-
-	chain{
-		dy=1, p=v('data_prop_sparkers'):ls(2), f=function()
-			cray{ct='insl', to=v('data_prop_sparkers'), done=0}
-			cray{ct='pscn', to=v('data_prop_sparkers')}
-
-			cray{to=v('data_prop_sparkers'), done=0}
-			pscn{sprk=1, done=0}
-			ssconv{t='pscn', oy=-1}
-
-			inwr{sprk=1, done=0}
-			ssconv{t='inwr', oy=1}
-		end
-	}
-
-	-- Propagate sparkers for the second row.
-	-- This reuses the DRAYs from the first row's data FILT propagation.
-	chain{
-		dx=-1, p=v('core.sprk_targets'):nw(0):n(LAYER_SHIFT):s(2):w(2),
-		f=function()
-			ssconv{t='inwr', done=0}; inwr{sprk=1}
-			adv{}
-			ssconv{t='inwr', done=0}; inwr{sprk=1}
-		end,
-	}
-
-	-- Propagate sparkers for the first row.
-	chain{
-		dx=-1, p=v('core.sprk_targets'):nw(0):n(LAYER_SHIFT):w(),
-		f=function()
-			-- Add INSLs above to block stray BRAYs from the core matrix.
-			ssconv{t='inwr', done=0}; inwr{sprk=1, done=0}; insl{oy=-1}
-			filt{}
-			ssconv{t='inwr', done=0}; inwr{sprk=1, done=0}; insl{oy=-1}
-			filt{}
-
-			local exp_dray_to = findpt{
-				e=getcurs(),
-				ns=v('core.sprk_targets'):ne(0),
-			}
-			exponential_dray{blocksz=2 * 2, s=getcurs():e(), e=exp_dray_to}
-
-			port{v='row_1_sprk_prop_dray_sparker'}
-			pscn{sprk=1, done=0}
-		end,
-	}
-
-	-- The input port for the draw pattern.
-	-- The port needs to reorder FILTs for detection by the LDTCs.
-	-- It does so by using an intermediate ARAY-DTEC stage, with
-	-- the DTECs offset and set to different ranges to capture
-	-- the correct FILT data.
-	-- Args:
-	-- - p: Horizontal reference for bottom of input port
-	port{v='data_in_swizzler', f=function(opts)
-		local staging_positions = {}
-		-- ARAY offset required, assuming first offset is 0
-		local rel_offsets = {}
-		local max_offset = 0
-		for i = 1, 56 * 2 do
-			table.insert(staging_positions, findpt{
-				ew=opts.p,
-				ne=ldtc_positions[i],
-			})
-			table.insert(rel_offsets,
-				odist(staging_positions[i], staging_positions[1]) + 1 - i
-			)
-			if rel_offsets[i] > max_offset then
-				max_offset = rel_offsets[i]
-			end
-		end
-		for i = 1, 56 * 2 do
-			chain{dx=1, dy=-1, p=staging_positions[i], f=function()
-				pconfig{part=v('data_reader_' .. i), to=getcurs()}
-				filt{}
-				dtec{r=max_offset - rel_offsets[i] + 1}
-			end}
-		end
-		array{
-			n=56 * 2, dx=1,
-			from=staging_positions[1]:n(3):e(3):e(max_offset),
-			f=function(i)
-				chain{dx=1, dy=-1, f=function()
-					aport{v='data_in'}
-					-- TODO: temporary data for now
-					-- local temp_data = 0x2aaaaaaa
-					-- if i % 2 == 0 then
-					-- 	temp_data = bxor(temp_data, 0x0fffffff)
-					-- end
-					local temp_data = 0x3fffffff
-					filt{mode='set', ct=temp_data}
-					aray{}
-					inwr{sprk=1, done=0}; ssconv{t='inwr', ox=-1, oy=1}
-				end}
-			end
-		}
-	end}
-
-	-- The last row doesn't need any data, but it does need the
-	-- INSLs cleared to make way for the BRAYs.
-	chain{
-		dx=-1, p=v('core.bray_targets'):sw(0):n(LAYER_SHIFT):w(),
-		f=function()
-			cray{r=56 * 2, s=v('core.bray_targets'):sw(0):n(LAYER_SHIFT)}
-			pscn{sprk=1, done=0}; ssconv{t='pscn', ox=1}
-		end
-	}
-
 	make_pixcol_propagator()
 
-	chain{
-		dx=1, p=findpt{
-			e=v('row_1_sprk_prop_dray_sparker'),
-			ns=v('horz_prop_dray_targets'):e(1),
-		}:e(10), -- TODO: temporary offset
-		f=function()
-			cray{to=v('row_1_sprk_prop_dray_sparker'), done=0}
-			cray{ct='pscn', to=v('row_1_sprk_prop_dray_sparker')}
-
-			pscn{sprk=1, done=0}
-			ssconv{t='pscn', ox=-1}
-		end
+	connect{
+		v='core.make_side_unit',
+		p=v('horz_prop_dray_targets'):e(2),
 	}
-
-	-- Copy in PSCNs wherever the BRAY gets annihilated.
-	-- These will spark the DRAYs used to write to the screen buffer.
-
-	-- Three stacks of five DRAYs, minus one to invert.
-	local num_seeds = ceildiv(56, 14)
-
-	array{
-		n=56, dy=2, p=findpt{
-			e=v('core.bray_targets'):ne(0):n(LAYER_SHIFT),
-			ns=v('horz_prop_dray_targets'):e(2),
-		},
-		f=function(i)
-			chain{dx=1, f=function()
-				if i % 2 == 1 then
-					-- Block diagonal BRAYs. This ensures that the set of IDs
-					-- containing the blocker and the BRAY target placeholders
-					-- will be preserved, to ensure that pixcols don't get
-					-- sparked by the DRAY sparkers.
-					local blocker_insl_w_pos = findpt{
-						ns=v('core.bray_targets'):nw(0):w(),
-						w=getcurs(),
-					}
-					local blocker_insl_e_pos = findpt{
-						ns=v('core.bray_targets'):ne(0):e(),
-						w=getcurs(),
-					}
-					insl{p=blocker_insl_w_pos, done=0}
-					if i < 55 then
-						insl{p=blocker_insl_w_pos:s(), done=0}
-					end
-					-- This row's blockers get removed when the data FILTs get
-					-- copied in, so we need to re-create them.
-					cray{ct='insl', to=blocker_insl_w_pos, done=0}
-				end
-				local invert_s = findpt{
-					ns=v('core.bray_targets'):ne(0),
-					w=getcurs(),
-				}
-				local invert_e = findpt{
-					ns=v('core.bray_targets'):nw(0),
-					w=getcurs(),
-				}
-				-- Invert, so that we write the pixcol where bits are set
-				if i == 56 then
-					-- The last row does not have FILTs, so we need to include
-					-- those spots in the fill.
-					cray{ct='insl', s=invert_s, r=56 * 2}
-				else
-					cray{ct='insl', s=invert_s, r=56}
-				end
-
-				for j = 1, num_seeds do
-					aport{v='core_sparker_seeds_col_' .. j}
-					pscn{sprk=1}
-					adv{}
-				end
-
-				-- replicate sprk pattern across three stacks
-				local rep_len = num_seeds * 2
-				local rep_s =
-					v('core.bray_targets_row_' .. i):le(1):n(LAYER_SHIFT)
-				local rep_e =
-					v('core.bray_targets_row_' .. i):lw(0):n(LAYER_SHIFT)
-				stacked_dray{
-					r=num_seeds * 2,
-					s=rep_s, e=rep_s:w(rep_len * 5 - 1),
-				}
-				inwr{sprk=1, done=0}; ssconv{t='inwr', under=1}
-
-				stacked_dray{
-					r=num_seeds * 2, off=2,
-					s=rep_s:w(rep_len * 5), e=rep_s:w(rep_len * 10 - 1),
-				}
-				inwr{sprk=1, done=0}; ssconv{t='inwr', under=1}
-
-				stacked_dray{
-					r=num_seeds * 2, off=4,
-					s=rep_s:w(rep_len * 10), e=rep_e,
-				}
-				aport{v='sprk_filler_sparkers'}
-				inwr{sprk=1, done=0}
-				ssconv{t='inwr', under=1}
-			end}
-		end
+	connect{
+		v='core.make_reset_pscn_sparkers',
+		-- TODO: temporary location
+		p=v('core.ppom_payload'):e(10),
 	}
-
-	for i = 1, num_seeds do
-		-- Respark the core sparker seeds. This comes before the
-		-- seed propagation, so we must spark them with life=3 sparks.
-		chain{
-			dy=-1, p=v('core_sparker_seeds_col_' .. i):ln(2), 
-			f=function()
-				-- There is one seed every two spaces, so make sure we
-				-- spark the right number.
-				local num_targets = ceildiv(
-					v('core_sparker_seeds_col_' .. i):sz().y, 2
-				)
-				cray{
-					life=3, r=num_targets,
-					s=v('core_sparker_seeds_col_' .. i):ln(0)
-				}
-
-				cray{ct='insl', to=v('core_sparker_seeds_col_' .. i), done=0}
-				cray{ct='pscn', to=v('core_sparker_seeds_col_' .. i), done=0}
-				ssconv{t='pscn', done=0}
-				if i ~= 1 then
-					-- Ensure the resparker CRAYs only touch the particles
-					-- that need resparking. This is necessary to ensure
-					-- that IDs are preserved, since these sparkers are
-					-- stacked on top of other particles.
-					filt{ox=-1, done=0}
-				end
-				-- This will be resparked before the lower CRAY updates.
-				aport{v='core_sparker_seeds_sparkers'}
-				inwr{sprk=1}
-
-				pscn{sprk=1}
-			end
-		}
-	end
-
-	-- Respark the sparkers.
-	chain{
-		-- TODO: temporary position
-		dx=1, p=v('core_sparker_seeds_sparkers'):le(3),
-		f=function()
-			local respark_s = v('core_sparker_seeds_sparkers'):le(0)
-			-- Do this twice to ensure that IDs are preserved
-			-- (the IDs flip each time). This is necessary since
-			-- the targets are stacked on top of other particles.
-			cray{r=num_seeds, s=respark_s, done=0}
-			cray{ct='inwr', r=num_seeds, s=respark_s, done=0}
-			cray{r=num_seeds, s=respark_s, done=0}
-			cray{ct='inwr', r=num_seeds, s=respark_s}
-
-			cray{life=3, r=num_seeds, s=respark_s, done=0}
-			ssconv{t='pscn', ox=1, oy=1, done=0}
-			pscn{sprk=1}
-
-			inwr{sprk=1, done=0}
-			ssconv{t='inwr', ox=1, oy=1}
-		end
-	}
-
-	-- After DRAYs have fired, replace their sparker slots with
-	-- sparkers for the next row's ARAYs.
-	-- We don't need to do this for the last two rows, since there
-	-- are no more ARAYs to fire.
-	-- However, for the second-last row, we do want to replace
-	-- any SPRK-ed PSCNs to prevent firing PSCN-BRAYs.
-	array{
-		n=56 - 1, dy=2, p=v('sprk_filler_sparkers'):ln(0):se(),
-		f=function(i)
-			chain{dx=1, f=function()
-				local is_last_row = (i == 56 - 1)
-				aport{v='aray_sparker_placer'}
-				if not is_last_row then
-					aport{v='aray_sparker_placer', oy=1}
-				end
-
-				-- Delete whatever is currently there.
-				-- This ignores the FILTs on every other column.
-				cray{
-					r=56,
-					from=getcurs():n():s(LAYER_SHIFT),
-					s=v('core.bray_targets_row_' .. i):le(0),
-					done=is_last_row,
-				}
-				if not is_last_row then
-					insl{oy=1}
-				end
-
-				pscn{sprk=1, done=is_last_row}
-				if not is_last_row then
-					filt{oy=1}
-				end
-
-				conv{from='sprk', to='pscn', done=0}
-				if is_last_row then
-					conv{from='pscn', to='sprk'}
-				else
-					conv{from='pscn', to='sprk', oy=1}
-				end
-
-				-- Place down INWRs.
-				local repl_type = 'inwr'
-				if is_last_row then
-					repl_type = 'insl'
-				end
-				cray{
-					ct=repl_type, r=56,
-					from=getcurs():n():s(LAYER_SHIFT),
-					s=v('core.bray_targets_row_' .. i):le(0),
-					done=is_last_row,
-				}
-				if not is_last_row then
-					insl{oy=1}
-				end
-
-				pscn{sprk=1, done=is_last_row}
-				if not is_last_row then
-					filt{oy=1}
-				end
-
-				conv{from='sprk', to='pscn', done=0}
-				if is_last_row then
-					conv{from='pscn', to='sprk'}
-				else
-					conv{from='pscn', to='sprk', oy=1}
-				end
-
-				-- Spark the INWRs.
-				if not is_last_row then
-					cray{
-						life=3, r=56,
-						from=getcurs():n():s(LAYER_SHIFT),
-						s=v('core.bray_targets_row_' .. i):le(0),
-						done=is_last_row,
-					}
-					insl{oy=1}
-				end
-
-				aport{v='aray_sparker_placer'}
-
-				if not is_last_row then
-					aport{v='aray_sparker_placer', oy=1}
-					aport{v='aray_sparker_sparker_sparkers'}
-					inwr{sprk=1, done=is_last_row}
-					filt{oy=1}
-				end
-			end}
-		end
-	}
-
-	chain{dy=1, p=v('aray_sparker_sparker_sparkers'):ls(3), f=function()
-		cray{r=56 - 2, s=v('aray_sparker_sparker_sparkers'):ls(0), done=0}
-		cray{ct='inwr', r=56 - 2, s=v('aray_sparker_sparker_sparkers'):ls(0)}
-
-		cray{r=56 - 2, s=v('aray_sparker_sparker_sparkers'):ls(0), done=0}
-		pscn{sprk=1, done=0}
-		ssconv{t='pscn', oy=-1}
-
-		inwr{sprk=1}
-
-		ssconv{t='inwr'}
-	end}
-
-	-- PPOM mechanism for the ARAY sparker placers.
-	array{
-		from=v('aray_sparker_placer'):nw(0):n(),
-		to=v('aray_sparker_placer'):ne(0):n(),
-		f=function() frme{} end,
-	}
-
-	chain{p=v('aray_sparker_placer'):sw(0):s(), f=function()
-		port{v='aray_sparker_placer_pusher_id_holder'}
-		insl{}
-	end}
-
-	chain{dy=-1, p=v('aray_sparker_placer'):nw(0):n(2), f=function()
-		pstn{life=1}
-
-		pstn{}
-
-		pstn{ct='dmnd', cap=2 * 56, done=0}
-		nscn{sprk=1, ox=1, done=0}
-		ssconv{t='nscn', ox=1, under=1}
-
-		port{v='aray_sparker_placer_pusher_target'}
-		-- This will be sparked with life=3 CRAY.
-		port{v='aray_sparker_placer_pusher_sparker', ox=-1}
-		conv{from='sprk', to='pscn', ox=-1, done=0}
-		pscn{sprk=1, ox=-1}
-
-		-- APOM setter for the pusher
-		pstn{ct='dmnd', r=0, cap=2 * 56}
-
-		cray{to=v('aray_sparker_placer_pusher_id_holder'), done=0}
-		dray{to=v('aray_sparker_placer_pusher_target'), done=0}
-		ssconv{t='pscn', done=0}
-		dmnd{}
-
-		pscn{sprk=1, done=0}
-	end}
-
-	chain{
-		dx=1, p=v('aray_sparker_placer_pusher_sparker'):e(4), f=function()
-			cray{life=3, to=v('aray_sparker_placer_pusher_sparker'), done=0}
-			ssconv{t='inwr'}
-
-			inwr{sprk=1}
-		end
-	}
-
-	chain{
-		dy=1, p=findpt{
-			s=v('aray_sparker_placer_pusher_id_holder'),
-			e=v('sprk_filler_sparkers'):ls(1),
-		},
-		f=function()
-			cray{to=v('aray_sparker_placer_pusher_target'), done=0}
-			cray{ct='insl', to=v('aray_sparker_placer_pusher_id_holder')}
-
-			pscn{sprk=1, done=0}
-			ssconv{t='pscn', ox=1, oy=-1}
-		end
-	}
-
-	connect{v='data_in_swizzler', p=v('vert_prop_ub'):n()}
+	-- TODO: temporary position
+	connect{v='core.data_in_swizzler', p=v('core.data_targets'):n(20)}
 end
