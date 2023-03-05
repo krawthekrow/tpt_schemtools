@@ -221,6 +221,33 @@ local function resolve_to_square(opts)
 	return opts
 end
 
+local function resolve_dray_tem(opts)
+	if opts.tem ~= nil and getmetatable(opts.tem) == Point then
+		opts.tems = opts.tem
+	end
+	opts = Options.opts_rect_line(opts, 'tem', 'tems', 'teme', opts.from)
+	if opts.teme ~= nil then
+		local tem_r = Geom.get_orth_dist(opts.tems, opts.teme) + 1
+		if opts.r == 1 then
+			opts.r = Geom.get_orth_dist(opts.tems, opts.teme) + 1
+		else
+			assert(
+				opts.r == tem_r,
+				'inconsistent DRAY template size ' .. tostring(tem_r) ..
+				': previously got ' .. tostring(opts.r)
+			)
+		end
+	end
+	if opts.tems ~= nil then
+		local extra_r = Geom.get_orth_dist(opts.from, opts.tems) - 1
+		opts.r = opts.r + extra_r
+		opts.tos = opts.tos:add(
+			Geom.get_orth_dir(opts.from, opts.tems):mult(-extra_r)
+		)
+	end
+	return opts
+end
+
 local function resolve_cray_s_e(opts)
 	if opts.tos ~= nil then
 		opts.j = Geom.get_orth_dist(opts.from, opts.tos) - 1
@@ -255,6 +282,7 @@ local PREPARE_FUNCS_RAW = {
 local RESOLVE_FUNCS_RAW = {
 	{resolve_to_line, ELEM_GROUP_TO_LINE},
 	{resolve_to_square, ELEM_GROUP_TO_SQUARE},
+	{resolve_dray_tem, {'dray'}},
 	{translate_props, {'any'}},
 	{resolve_cray_s_e, ELEM_GROUP_CRAY_LIKE},
 	{resolve_dray_s_e, ELEM_GROUP_DRAY_LIKE},
@@ -266,6 +294,9 @@ local EXTRA_OPTS_RAW = {
 	to = ELEM_GROUP_TO_POS,
 	tos = ELEM_GROUP_TO_LINE,
 	toe = ELEM_GROUP_TO_LINE,
+	tem = {'dray'},
+	tems = {'dray'},
+	teme = {'dray'},
 	sprk = {'conduct'},
 }
 
