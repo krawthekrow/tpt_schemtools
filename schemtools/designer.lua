@@ -209,6 +209,7 @@ end
 
 function Designer:connect_1way(v_from, p_to, args)
 	local port = self:get_var_raw(v_from)
+	if p_to == nil then p_to = port.val end
 	local ctx, _ = self:parse_full_var_name(v_from)
 	if port.connect_func ~= nil then
 		self:run_with_ctx(ctx, function()
