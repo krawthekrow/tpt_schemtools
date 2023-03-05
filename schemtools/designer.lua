@@ -409,13 +409,7 @@ function Designer:get_orth_dist(from, to)
 end
 
 function Designer:get_orth_dir(from, to)
-	Geom.assert_orth(from, to)
-	local dp = to:sub(from)
-	if dp.x > 0 then dp.x = 1 end
-	if dp.x < 0 then dp.x = -1 end
-	if dp.y > 0 then dp.y = 1 end
-	if dp.y < 0 then dp.y = -1 end
-	return dp
+	return Geom.get_orth_dir(from, to)
 end
 
 function Designer:wrap_with_xpcall(func)
@@ -599,13 +593,19 @@ function Designer:add_comment(opts)
 	opts = self:opts_pos(opts)
 end
 
+local custom_dump = function(x)
+	if getmetatable(x) == Geom.Point then
+		return '(' .. x.x .. ', ' .. x.y .. ')'
+	end
+	return nil
+end
+
+function Designer:dump_var_to_str(x)
+	return Util.dump_var_to_str(x, custom_dump)
+end
+
 function Designer:dump_var(x)
-	return Util.dump_var(x, function(x)
-		if getmetatable(x) == Geom.Point then
-			return '(' .. x.x .. ', ' .. x.y .. ')'
-		end
-		return nil
-	end)
+	return Util.dump_var(x, custom_dump)
 end
 
 function Designer:test_setup(opts)

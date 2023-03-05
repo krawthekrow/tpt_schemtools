@@ -295,4 +295,14 @@ function Geom.get_orth_dist(from, to)
 	return math.max(math.abs(dp.x), math.abs(dp.y))
 end
 
+function Geom.get_orth_dir(from, to)
+	Geom.assert_orth(from, to)
+	local dp = to:sub(from)
+	if dp.x > 0 then dp.x = 1 end
+	if dp.x < 0 then dp.x = -1 end
+	if dp.y > 0 then dp.y = 1 end
+	if dp.y < 0 then dp.y = -1 end
+	return dp
+end
+
 return Geom

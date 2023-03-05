@@ -34,7 +34,7 @@ function Util.escape_str(s)
 	return s:gsub('[%c\\]', escape_map)
 end
 
-function Util.dump_var(x, custom_dump)
+function Util.dump_var_to_str(x, custom_dump)
 	local tbl_cache = {}
 	local function dump_var_inner(x, indent)
 		if type(x) == 'string' then
@@ -62,7 +62,11 @@ function Util.dump_var(x, custom_dump)
 			indent .. '}'
 		return xstr
 	end
-	print(dump_var_inner(x, ''))
+	return dump_var_inner(x, '')
+end
+
+function Util.dump_var(...)
+	print(Util.dump_var_to_str(...))
 end
 
 function Util.str_split(str, delimiter)
