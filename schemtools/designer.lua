@@ -634,6 +634,9 @@ function Designer:test_setup(opts)
 	if opts.dump_func ~= nil then
 		self.tester.dump_func = opts.dump_func
 	end
+	if opts.dump_debug_info ~= nil then
+		self.tester.dump_debug_info = opts.dump_debug_info
+	end
 
 	for _, spec in pairs(opts.inputs) do
 		self.tester:add_input(opts_io(spec))

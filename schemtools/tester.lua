@@ -13,6 +13,7 @@ function Tester:new()
 		num_ticks = 0,
 		stop_at = nil,
 		dump_func = nil,
+		dump_debug_info = true,
 	}
 	setmetatable(o, self)
 	self.__index = self
@@ -119,17 +120,17 @@ local function compare_test_output(val, expected_val)
 	if type(val) == 'table' then
 		for k, v in pairs(expected_val) do
 			if not compare_test_output(v, val[k]) then
-				return false
+				return false, k
 			end
 		end
 		for k, _ in pairs(val) do
 			if expected_val[k] == nil then
-				return false
+				return false, k
 			end
 		end
-		return true
+		return true, nil
 	end
-	return val == expected_val
+	return val == expected_val, nil
 end
 
 function Tester:on_tick()
@@ -144,22 +145,31 @@ function Tester:on_tick()
 			local input, output = self.inputs[k], self.outputs[k]
 			if output ~= nil then
 				local val = output.get_func(output.p, keyframe)
-				if
-					not compare_test_output(val, v) and
-					keyframe.debug_info ~= nil
-				then
+				local is_match, mismatch_key = compare_test_output(val, v)
+				if not is_match then
 					if self.dump_func == nil then
-						print('failure debug info:')
-						Util.dump_var(keyframe.debug_info)
-						print('actual output: ' .. val)
-						Util.dump_var(val)
-						print('spec output:' .. v)
-						Util.dump_var(v)
+						if self.dump_debug_info and keyframe.debug_info ~= nil then
+							print('failure debug info:')
+							Util.dump_var(keyframe.debug_info)
+						end
+						if mismatch_key ~= nil then
+							print(
+								'actual output (key = ' .. mismatch_key .. '): ' ..
+								val[mismatch_key]
+							)
+							print(
+								'spec output (key = ' .. mismatch_key .. '): ' ..
+								v[mismatch_key]
+							)
+						else
+							print('actual output: ' .. val)
+							print('spec output:' .. v)
+						end
 					else
 						self.dump_func(
 							self.num_ticks,
 							keyframe.debug_info,
-							val, v
+							val, v, mismatch_key
 						)
 					end
 					assert(
