@@ -200,23 +200,39 @@ end
 
 function Rect:slice(opts)
 	local lbx, lby, ubx, uby = self.lb.x, self.lb.y, self.ub.x, self.ub.y
-	if opts.x ~= nil then
-		if opts.x >= 0 then
-			lbx = self.lb.x + opts.x - 1
-			ubx = self.lb.x + opts.x - 1
+	local function resolve_x(x)
+		if x >= 0 then
+			return self.lb.x + x - 1
 		else
-			lbx = self.ub.x + opts.x + 1
-			ubx = self.ub.x + opts.x + 1
+			return self.ub.x + x + 1
 		end
 	end
-	if opts.y ~= nil then
-		if opts.y >= 0 then
-			lby = self.lb.y + opts.y - 1
-			uby = self.lb.y + opts.y - 1
+	local function resolve_y(y)
+		if y >= 0 then
+			return self.lb.y + y - 1
 		else
-			lby = self.ub.y + opts.y + 1
-			uby = self.ub.y + opts.y + 1
+			return self.ub.y + y + 1
 		end
+	end
+	if opts.x ~= nil then
+		lbx = resolve_x(opts.x)
+		ubx = resolve_x(opts.x)
+	end
+	if opts.y ~= nil then
+		lby = resolve_y(opts.y)
+		uby = resolve_y(opts.y)
+	end
+	if opts.x1 ~= nil then
+		lbx = resolve_x(opts.x1)
+	end
+	if opts.x2 ~= nil then
+		ubx = resolve_x(opts.x2)
+	end
+	if opts.y1 ~= nil then
+		lby = resolve_y(opts.y1)
+	end
+	if opts.y2 ~= nil then
+		uby = resolve_y(opts.y2)
 	end
 	return Rect:new(Point:new(lbx, lby), Point:new(ubx, uby))
 end
